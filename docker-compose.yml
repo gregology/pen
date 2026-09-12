@@ -1,0 +1,141 @@
+# AI Penetration Testing Platform — V1
+# Deploy as a Portainer stack (Git-based, so `build:` works).
+# Secrets are supplied via Portainer stack environment variables — never here.
+#
+# All state lives in host paths under /home/user/pen (create before deploy):
+#   /home/user/pen/vpn-configs/   WireGuard .conf files, one per exit node (chmod 600)
+#   /home/user/pen/llm-logs/      LLM proxy audit log output
+#   /home/user/pen/dsh-data/      agent workspace / DSH state
+#
+# These paths live inside the repo checkout on the host; .gitignore is
+# what keeps vpn-configs (private keys) and llm-logs (sensitive
+# request/response bodies) out of commits. Do not remove it.
+
+name: pen
+
+networks:
+  # Agent <-> gateways only. `internal: true` = no external route exists here.
+  # Subnets are pinned so the kill switch's CIDR allow rules are static
+  # config, not deploy-time discovery.
+  sandbox:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  # Gateways <-> internet/LAN. Only the two gateway containers are attached.
+  # llm-proxy reaches providers over this, including gaming-rig on the LAN.
+  egress:
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+
+services:
+
+  # ------------------------------------------------------------------
+  # VPN gateway: sole egress for attack traffic. Owns the kill switch
+  # and the exit-node control API. The agent shares its network
+  # namespace, so this container's iptables IS the agent's perimeter.
+  # ------------------------------------------------------------------
+  vpn-gateway:
+    build: ./images/vpn-gateway
+    image: pen/vpn-gateway:v1
+    container_name: vpn-gateway
+    cap_add:
+      - NET_ADMIN          # required for wg-quick + iptables
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - sandbox            # agent + llm-proxy reach it here
+      - egress             # encrypted tunnel leaves via here; kill switch
+                           # blocks everything else on this interface
+    volumes:
+      # WireGuard configs contain private keys — chmod 600, gitignored,
+      # never committed.
+      - /home/user/pen/vpn-configs:/vpn/configs:ro
+    environment:
+      - VPN_API_TOKEN=${VPN_API_TOKEN}
+      - VPN_API_PORT=8080
+      - SANDBOX_CIDR=172.30.0.0/24   # must match the sandbox subnet above
+      - EGRESS_CIDR=172.31.0.0/24    # must match the egress subnet above
+      - DNS_SERVERS=1.1.1.1 9.9.9.9  # must match `dns:` below
+    # Pinned resolvers so the kill switch can permit exactly these. If the
+    # VPN provider forces its own DNS (some block third-party port 53),
+    # use the provider's resolver IPs here and in DNS_SERVERS instead.
+    dns:
+      - 1.1.1.1
+      - 9.9.9.9
+    ports:
+      # DSH web GUI. Published HERE because the agent shares this
+      # namespace. dsh refuses to bind 0.0.0.0 by design, so a socat
+      # forwarder in the gateway bridges this port to the agent's
+      # loopback listener. Bound to localhost — front it with your
+      # reverse proxy if remote access is needed.
+      - "127.0.0.1:3080:3080"
+    healthcheck:
+      # "Healthy" = kill switch applied and API up (tunnel may still be
+      # connecting; the API reports that in /status).
+      test: ["CMD", "curl", "-fsS", "-H", "Authorization: Bearer $${VPN_API_TOKEN}", "http://localhost:8080/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Agent: DeepSeek Harness + pentest toolchain. No networks of its own,
+  # no published ports — it lives entirely inside the vpn-gateway
+  # namespace. Its only peers are llm-proxy and the gateway API.
+  # ------------------------------------------------------------------
+  agent:
+    build: ./images/agent
+    image: pen/agent:v1
+    container_name: agent
+    network_mode: service:vpn-gateway
+    depends_on:
+      vpn-gateway:
+        condition: service_healthy   # never start before the kill switch
+    environment:
+      # All LLM traffic goes to the proxy over the sandbox network.
+      # The agent is configured with a single "llm-proxy" provider; model
+      # IDs are the namespaced aliases from litellm/config.yaml
+      # (e.g. kimi-coding/k3, zai/glm-5.3, gaming-rig/qwen38-27b).
+      - OPENAI_BASE_URL=http://llm-proxy:4000/v1
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY}   # proxy key, NOT a provider key
+      # VPN control API — same namespace, so plain localhost.
+      - VPN_API_URL=http://localhost:8080
+      - VPN_API_TOKEN=${VPN_API_TOKEN}
+    volumes:
+      - /home/user/pen/dsh-data:/data
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # LLM proxy: sole path to LLM providers. Holds the provider keys so
+  # the agent never sees them, and writes the full request/response
+  # audit log to a host path the agent cannot touch.
+  # ------------------------------------------------------------------
+  llm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: llm-proxy
+    networks:
+      - sandbox            # agent reaches it here
+      - egress             # provider calls leave directly (no VPN —
+                           # authenticated API traffic, per DESIGN.md).
+                           # gaming-rig (10.0.0.21) is reached on the LAN
+                           # via the host's route from this bridge.
+    volumes:
+      - /home/user/pen/litellm/config.yaml:/app/config.yaml:ro
+      - /home/user/pen/litellm/custom_callbacks.py:/app/custom_callbacks.py:ro
+      - /home/user/pen/llm-logs:/logs
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - KIMI_CODING_API_KEY=${KIMI_CODING_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - GAMING_RIG_API_KEY=${GAMING_RIG_API_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health/liveliness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
