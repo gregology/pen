@@ -1,0 +1,61 @@
+# Seeded into $DSH_HOME/settings.yaml on first boot. Exactly one provider:
+# the LLM proxy. Model IDs are the namespaced aliases from
+# litellm/config.yaml; the proxy key (not a provider key) arrives via
+# OPENAI_API_KEY from the stack environment.
+llm-pi-ai:
+  providers:
+    llm-proxy:
+      displayName: llm-proxy
+      api: openai-completions
+      baseURL: http://llm-proxy:4000/v1
+      apiKeyEnv: OPENAI_API_KEY
+      streamIdleTimeoutMs: 1800000
+      models:
+        - id: kimi-coding/k3
+          name: Kimi K3
+          contextWindow: 1048576
+          maxTokens: 131072
+        - id: kimi-coding/k3-256k
+          name: Kimi K3-256K
+          contextWindow: 262144
+          maxTokens: 131072
+        - id: kimi-coding/kimi-for-coding
+          name: Kimi K2.7 Code
+          contextWindow: 262144
+          maxTokens: 32768
+        - id: kimi-coding/kimi-for-coding-highspeed
+          name: Kimi For Coding HighSpeed
+          contextWindow: 262144
+          maxTokens: 32768
+        - id: zai/glm-5.3
+          name: GLM-5.3
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: zai/glm-5.3-flash
+          name: GLM-5.3-Flash (zai)
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: zai/glm-5.3-highspeed
+          name: GLM-5.3 Highspeed
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: deepseek/deepseek-flash
+          name: DeepSeek-Flash
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: deepseek/deepseek-v4-pro
+          name: DeepSeek-V4-Pro
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: gaming-rig/qwen38-27b
+          name: Qwen 3.8 27B (local)
+          contextWindow: 128000
+          maxTokens: 32000
+        - id: gaming-rig/qwen3.8-flash-next
+          name: Qwen 3.8 Flash Next (local)
+          contextWindow: 256000
+          maxTokens: 32000
+        - id: gaming-rig/glm-5.3-flash
+          name: GLM 5.3 Flash (local)
+          contextWindow: 128000
+          maxTokens: 32000
