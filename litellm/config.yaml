@@ -1,0 +1,95 @@
+# LiteLLM proxy config — the agent's only LLM provider.
+#
+# Model aliases are namespaced by upstream provider because model IDs
+# collide across them (glm-5.3-flash exists on both zai and gaming-rig).
+# The agent sees e.g. "kimi-coding/k3" as the model name; LiteLLM strips
+# the prefix when calling the upstream.
+#
+# All upstreams are spoken to as OpenAI-completions-compatible APIs
+# (openai/ prefix), matching how the agent's DSH config consumed them.
+
+model_list:
+  # ---- kimi-coding -------------------------------------------------
+  - model_name: kimi-coding/k3
+    litellm_params:
+      model: openai/k3
+      api_base: https://api.kimi.com/coding/v1
+      api_key: os.environ/KIMI_CODING_API_KEY
+  - model_name: kimi-coding/k3-256k
+    litellm_params:
+      model: openai/k3-256k
+      api_base: https://api.kimi.com/coding/v1
+      api_key: os.environ/KIMI_CODING_API_KEY
+  - model_name: kimi-coding/kimi-for-coding
+    litellm_params:
+      model: openai/kimi-for-coding
+      api_base: https://api.kimi.com/coding/v1
+      api_key: os.environ/KIMI_CODING_API_KEY
+  - model_name: kimi-coding/kimi-for-coding-highspeed
+    litellm_params:
+      model: openai/kimi-for-coding-highspeed
+      api_base: https://api.kimi.com/coding/v1
+      api_key: os.environ/KIMI_CODING_API_KEY
+
+  # ---- zai ----------------------------------------------------------
+  - model_name: zai/glm-5.3
+    litellm_params:
+      model: openai/glm-5.3
+      api_base: https://api.z.ai/api/coding/paas/v4
+      api_key: os.environ/ZAI_API_KEY
+  - model_name: zai/glm-5.3-flash
+    litellm_params:
+      model: openai/glm-5.3-flash
+      api_base: https://api.z.ai/api/coding/paas/v4
+      api_key: os.environ/ZAI_API_KEY
+  - model_name: zai/glm-5.3-highspeed
+    litellm_params:
+      model: openai/glm-5.3-highspeed
+      api_base: https://api.z.ai/api/coding/paas/v4
+      api_key: os.environ/ZAI_API_KEY
+
+  # ---- deepseek ------------------------------------------------------
+  - model_name: deepseek/deepseek-flash
+    litellm_params:
+      model: openai/deepseek-flash
+      api_base: https://api.deepseek.com/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: deepseek/deepseek-v4-pro
+    litellm_params:
+      model: openai/deepseek-v4-pro
+      api_base: https://api.deepseek.com/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # ---- gaming-rig (local OpenAI-completions server on the LAN) ------
+  # Reached directly over the LAN via the egress bridge — this traffic
+  # never touches the VPN and never leaves the local network.
+  - model_name: gaming-rig/qwen38-27b
+    litellm_params:
+      model: openai/qwen38-27b
+      api_base: http://10.0.0.21:8080/v1
+      api_key: os.environ/GAMING_RIG_API_KEY
+      stream_timeout: 1800        # matches the 30 min streamIdleTimeout
+                                  # the DSH config used for this server
+  - model_name: gaming-rig/qwen3.8-flash-next
+    litellm_params:
+      model: openai/qwen3.8-flash-next
+      api_base: http://10.0.0.21:8080/v1
+      api_key: os.environ/GAMING_RIG_API_KEY
+      stream_timeout: 1800
+  - model_name: gaming-rig/glm-5.3-flash
+    litellm_params:
+      model: openai/glm-5.3-flash
+      api_base: http://10.0.0.21:8080/v1
+      api_key: os.environ/GAMING_RIG_API_KEY
+      stream_timeout: 1800
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  # Full request/response audit logging, written outside the agent's
+  # control (see custom_callbacks.py).
+  callbacks: ["custom_callbacks.proxy_handler_instance"]
+  # Fail the request if the audit log write fails: unaudited LLM calls
+  # are worse than failed ones for this platform.
+  turn_off_message_logging: false

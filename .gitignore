@@ -1,0 +1,7 @@
+# Secrets and runtime state live inside the repo tree on the host
+# (hard limit #9). These paths must never be committed.
+vpn-configs/
+llm-logs/
+dsh-data/
+
+__pycache__/
