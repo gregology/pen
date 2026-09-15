@@ -68,9 +68,9 @@ services:
       # DSH web GUI. Published HERE because the agent shares this
       # namespace. dsh refuses to bind 0.0.0.0 by design, so a socat
       # forwarder in the gateway bridges this port to the agent's
-      # loopback listener. Bound to localhost — front it with your
-      # reverse proxy if remote access is needed.
-      - "127.0.0.1:3080:3080"
+      # loopback listener. Bound to the LAN address only: reachable as
+      # http://10.0.0.10:3080, closed on the host's other interfaces.
+      - "10.0.0.10:3080:3080"
     healthcheck:
       # "Healthy" = kill switch applied and API up (tunnel may still be
       # connecting; the API reports that in /status).

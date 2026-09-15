@@ -156,9 +156,12 @@ The security-critical component; build and test it first, alone.
    `VPN_API_TOKEN`, `LITELLM_MASTER_KEY`, `KIMI_CODING_API_KEY`,
    `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `GAMING_RIG_API_KEY`.
 4. Deploy. Portainer builds both custom images from the repo.
-5. Expose the DSH web GUI via the published port on `vpn-gateway`
-   (bound to localhost or behind your existing reverse proxy — it is a
-   control surface, not a public service).
+5. Reach the DSH web GUI at `http://10.0.0.10:3080` — published on the
+   host's LAN address only (the agent passes `--trusted-host
+   10.0.0.10:3080` so the trust fence accepts that authority). Plain-HTTP
+   LAN access is not a secure browser context, so parts of the settings
+   UI relying on `crypto.randomUUID` may misbehave — a known DSH
+   limitation, also seen on dev01.
 
 ## Verification checklist (do all before declaring V1 done)
 
