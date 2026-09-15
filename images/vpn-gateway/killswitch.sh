@@ -40,8 +40,11 @@ done
 iptables -A INPUT -p tcp --dport "$API_PORT" -s "$SANDBOX_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport "$API_PORT" -j DROP
 
-# The GUI forwarder answers the host (via the published port, arriving
-# from either bridge) and the sandbox — never the tunnel.
+# The GUI forwarder answers the LAN (Docker DNAT preserves the real
+# client source IP), the host via either bridge, and the sandbox —
+# never the tunnel.
+: "${LAN_CIDR:?required}"
 iptables -A INPUT -p tcp --dport 3080 -s "$SANDBOX_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport 3080 -s "$EGRESS_CIDR" -j ACCEPT
+iptables -A INPUT -p tcp --dport 3080 -s "$LAN_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport 3080 -j DROP

@@ -57,6 +57,7 @@ services:
       - VPN_API_PORT=8080
       - SANDBOX_CIDR=172.30.0.0/24   # must match the sandbox subnet above
       - EGRESS_CIDR=172.31.0.0/24    # must match the egress subnet above
+      - LAN_CIDR=10.0.0.0/24         # household LAN; GUI is reachable from here
       - DNS_SERVERS=1.1.1.1 9.9.9.9  # must match `dns:` below
     # Pinned resolvers so the kill switch can permit exactly these. If the
     # VPN provider forces its own DNS (some block third-party port 53),
