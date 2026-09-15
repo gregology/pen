@@ -132,8 +132,8 @@ The security-critical component; build and test it first, alone.
 ### 3. agent image (`images/agent/`)
 
 - Base: Node 24 slim + `@deepseek-ai/dsh` installed globally, plus
-  baseline tools (nmap, curl, whois, dig, nikto, gobuster — kept minimal
-  for V1).
+  baseline tools (nmap, curl, whois, dig, gobuster — kept minimal for
+  V1; nikto was dropped because it is absent from Debian bookworm main).
 - `settings.seed.yaml` is copied to `$DSH_HOME/settings.yaml` on first
   boot: exactly one provider, `llm-proxy`, with the twelve namespaced
   model aliases. `$DSH_HOME` lives on the host bind mount so the GUI

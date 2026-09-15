@@ -1,9 +1,11 @@
 FROM node:24-bookworm-slim
 
 # Baseline recon tooling per the V1 plan — adding a tool is a package
-# here, not a special case anywhere else in the platform.
+# here, not a special case anywhere else in the platform. nikto is
+# absent from bookworm main and deliberately not pulled from elsewhere
+# for V1.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nmap curl whois dnsutils nikto gobuster \
+        nmap curl whois dnsutils gobuster \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @deepseek-ai/dsh@0.1.5-rc.1
