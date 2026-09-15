@@ -73,8 +73,10 @@ services:
       - "10.0.0.10:3080:3080"
     healthcheck:
       # "Healthy" = kill switch applied and API up (tunnel may still be
-      # connecting; the API reports that in /status).
-      test: ["CMD", "curl", "-fsS", "-H", "Authorization: Bearer $${VPN_API_TOKEN}", "http://localhost:8080/status"]
+      # connecting; the API reports that in /status). CMD-SHELL because
+      # the token must be expanded in the container — CMD would pass the
+      # literal string "$VPN_API_TOKEN" to curl and 401 forever.
+      test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${VPN_API_TOKEN}\" http://localhost:8080/status"]
       interval: 15s
       timeout: 5s
       retries: 5
