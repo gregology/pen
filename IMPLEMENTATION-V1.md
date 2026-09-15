@@ -96,8 +96,10 @@ The security-critical component; build and test it first, alone.
   resolvconf; DNS is pinned in compose instead).
 - The GUI forwarder exists because `dsh web` refuses `--host 0.0.0.0` by
   design, and Docker port publishing cannot reach a loopback-bound
-  process. `socat` bridges the published port to the agent's loopback
-  listener; the kill switch scopes :3080 to host and sandbox traffic.
+  process. dsh listens on loopback :3090; `socat` bridges the published
+  :3080 to it (the ports must differ — a wildcard :3080 forwarder would
+  collide with any loopback :3080 listener). The kill switch scopes
+  :3080 to host and sandbox traffic.
 - Healthcheck: `curl -f http://localhost:8080/status` (tokened). The
   agent's `depends_on: service_healthy` means the agent never starts
   before the kill switch is live.

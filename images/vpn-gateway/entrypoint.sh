@@ -7,7 +7,9 @@ set -eu
 
 # dsh web refuses to bind 0.0.0.0 by design, and Docker port publishing
 # cannot reach a loopback-bound process, so the GUI gets a forwarder in
-# this namespace. killswitch.sh limits :3080 to the host and sandbox.
-socat TCP-LISTEN:3080,fork,reuseaddr TCP:127.0.0.1:3080 &
+# this namespace. dsh listens on loopback :3090; a wildcard :3080 bind
+# would collide with any loopback listener on the same port, which is
+# why the two ports differ. killswitch.sh limits :3080 to host/sandbox.
+socat TCP-LISTEN:3080,fork,reuseaddr TCP:127.0.0.1:3090 &
 
 exec python3 /app/api.py
