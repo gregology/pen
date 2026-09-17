@@ -26,6 +26,11 @@ ENDPOINT_COMMENT = "pen-endpoint"
 
 TOKEN = os.environ["VPN_API_TOKEN"]
 PORT = int(os.environ.get("VPN_API_PORT", "8080"))
+LAN_CIDR = os.environ["LAN_CIDR"]
+# wg-quick claims rule priorities just ahead of whatever already exists,
+# so the LAN rule can only win by being (re)asserted after each tunnel
+# bring-up, at a priority below wg-quick's chosen slots.
+LAN_RULE_PRIORITY = 90
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -91,6 +96,13 @@ def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def keep_lan_on_main_table():
+    # Without this, wg-quick's not-fwmark rule diverts LAN-bound replies
+    # into the tunnel and the GUI goes dark while the tunnel is up.
+    run(["ip", "rule", "add", "to", LAN_CIDR, "lookup", "main",
+         "priority", str(LAN_RULE_PRIORITY)])
+
+
 def tunnel_up(name):
     global current_node
     with node_lock:
@@ -114,6 +126,7 @@ def tunnel_up(name):
         if result.returncode != 0:
             current_node = None
             return False, result.stderr.strip()
+        keep_lan_on_main_table()
         current_node = name
         return True, None
 
