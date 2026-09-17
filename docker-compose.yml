@@ -42,6 +42,11 @@ services:
     container_name: vpn-gateway
     cap_add:
       - NET_ADMIN          # required for wg-quick + iptables
+    # /proc/sys is read-only in containers; wg-quick requires
+    # src_valid_mark=1 for its policy routing, so Docker sets it here
+    # (the image's sysctl shim satisfies wg-quick's redundant write).
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
     devices:
       - /dev/net/tun:/dev/net/tun
     networks:
@@ -137,7 +142,8 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - GAMING_RIG_API_KEY=${GAMING_RIG_API_KEY}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health/liveliness"]
+      # The LiteLLM image has no curl; its own venv python does the probe.
+      test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')\""]
       interval: 30s
       timeout: 5s
       retries: 3

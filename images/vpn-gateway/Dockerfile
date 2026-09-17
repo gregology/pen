@@ -6,8 +6,11 @@ FROM alpine:3.21
 RUN apk add --no-cache wireguard-tools iproute2 iptables python3 curl socat
 
 WORKDIR /app
-COPY killswitch.sh entrypoint.sh ./
+COPY killswitch.sh entrypoint.sh sysctl ./
 COPY api.py ./
-RUN chmod +x killswitch.sh entrypoint.sh
+RUN chmod +x killswitch.sh entrypoint.sh sysctl
+
+# /app first so the sysctl shim shadows /sbin/sysctl for wg-quick.
+ENV PATH="/app:$PATH"
 
 ENTRYPOINT ["/app/entrypoint.sh"]

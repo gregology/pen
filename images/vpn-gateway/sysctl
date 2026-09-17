@@ -1,0 +1,10 @@
+#!/bin/sh
+# wg-quick insists on writing net.ipv4.conf.all.src_valid_mark itself, but
+# /proc/sys is read-only in containers and the write fails even when the
+# value is already correct, aborting the whole bring-up. Docker sets the
+# real value at container creation (compose `sysctls:`); this shim lets
+# wg-quick believe it did.
+if [ "$1" = "-q" ] && [ "$2" = "net.ipv4.conf.all.src_valid_mark=1" ]; then
+    exit 0
+fi
+exec /sbin/sysctl "$@"
