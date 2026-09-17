@@ -28,12 +28,14 @@ def _append(record: dict) -> None:
 
 class AuditLogger(CustomLogger):
     def _record(self, kwargs, response_obj, start_time, end_time, error=None):
+        metadata = (kwargs.get("litellm_params") or {}).get("metadata") or {}
         record = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "model": kwargs.get("model"),
-            "litellm_model_name": (kwargs.get("litellm_params") or {}).get(
-                "metadata", {}
-            ).get("model_name"),
+            # The public alias the caller requested (e.g. zai/glm-5.3-flash
+            # vs gaming-rig/glm-5.3-flash) — without it the audit trail
+            # cannot tell which upstream served the call.
+            "model_alias": metadata.get("model_group"),
             "messages": kwargs.get("messages"),
             "optional_params": kwargs.get("optional_params"),
             "response": None if error else response_obj,
