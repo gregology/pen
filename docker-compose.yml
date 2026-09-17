@@ -1,5 +1,10 @@
 # AI Penetration Testing Platform — V1
-# Deploy as a Portainer stack (Git-based, so `build:` works).
+# Deployed as a Portainer stack on host01 (env 16). Custom images are
+# built on the host (Portainer's `build:` works from a stale creation-time
+# snapshot of the repo — see IMPLEMENTATION-V1.md):
+#   git -C /home/user/pen pull
+#   docker build -t pen/vpn-gateway:v1 /home/user/pen/images/vpn-gateway
+#   docker build -t pen/agent:v1       /home/user/pen/images/agent
 # Secrets are supplied via Portainer stack environment variables — never here.
 #
 # All state lives in host paths under /home/user/pen (create before deploy):

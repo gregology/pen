@@ -26,11 +26,14 @@ vpn-gateway, llm-proxy) deployed as a **Portainer stack** from this Git repo.
   custody, and per-request logging, so we don't build a proxy to get an audit
   trail. Full request/response capture goes to an append-only volume the
   agent cannot write to.
-- **Portainer Git stack, not web-editor stack.** Web-editor stacks cannot
-  `build:` custom images; a Git-based stack builds the vpn-gateway and agent
-  images from this repo on deploy, keeping image definitions versioned with
-  the compose file. Secrets live in Portainer stack environment variables,
-  never in the repo.
+- **Host-built images, not Portainer `build:`.** Portainer builds from a
+  creation-time snapshot of the repo in its own project directory, so
+  image builds through the stack go stale the moment main moves (observed
+  in practice: a redeploy overwrote a fresh fix with stale code). The
+  house convention from the Portainer runbook applies instead: images are
+  built on the host from `/home/user/pen/images/*` and referenced by tag
+  with `pull_policy: never`. Secrets live in Portainer stack environment
+  variables, never in the repo.
 
 ## Repo layout
 
@@ -148,17 +151,23 @@ The security-critical component; build and test it first, alone.
 
 ### 4. Stack & deployment
 
-1. Create the host directories on the Portainer host and place the
-   WireGuard configs (read-only mount, chmod 600 — they contain private
-   keys, never commit them):
+1. Clone this repo to `/home/user/pen` on host01 and create the runtime
+   directories (WireGuard configs go in `vpn-configs/`, chmod 600 — they
+   contain private keys, never commit them):
    `mkdir -p /home/user/pen/{vpn-configs,llm-logs,dsh-data}`
-2. In Portainer: **Stacks → Add stack → Git repository**, pointing at this
-   repo, compose path `docker-compose.yml`.
-3. Set stack environment variables in Portainer:
+2. Build the custom images on the host (re-run after every repo change
+   to `images/`):
+   `docker build -t pen/vpn-gateway:v1 /home/user/pen/images/vpn-gateway`
+   `docker build -t pen/agent:v1 /home/user/pen/images/agent`
+3. Create the stack via the Portainer API (repository endpoint, env 16)
+   or the UI, compose path `docker-compose.yml`.
+4. Set stack environment variables in Portainer:
    `VPN_API_TOKEN`, `LITELLM_MASTER_KEY`, `KIMI_CODING_API_KEY`,
    `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `GAMING_RIG_API_KEY`.
-4. Deploy. Portainer builds both custom images from the repo.
-5. Reach the DSH web GUI at `http://10.0.0.10:3080` — published on the
+5. Deploy. Note: this Portainer version records the stack with
+   `GitConfig: null`, so later compose changes are applied by PUT-ing the
+   whole file back (preserving Env), not by "pull and redeploy".
+6. Reach the DSH web GUI at `http://10.0.0.10:3080` — published on the
    host's LAN address only (the agent passes `--trusted-host
    10.0.0.10:3080` so the trust fence accepts that authority). Plain-HTTP
    LAN access is not a secure browser context, so parts of the settings
