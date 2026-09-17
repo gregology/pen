@@ -5,11 +5,12 @@ set -eu
 # ordering the no-leak guarantee depends on.
 /app/killswitch.sh
 
-# dsh web refuses to bind 0.0.0.0 by design, and Docker port publishing
-# cannot reach a loopback-bound process, so the GUI gets a forwarder in
-# this namespace. dsh listens on loopback :3090; a wildcard :3080 bind
-# would collide with any loopback listener on the same port, which is
-# why the two ports differ. killswitch.sh limits :3080 to host/sandbox.
-socat TCP-LISTEN:3080,fork,reuseaddr TCP:127.0.0.1:3090 &
+# The agents' web UIs refuse wildcard binds by design, and Docker port
+# publishing cannot reach a loopback-bound process, so each gets a
+# forwarder in this namespace. Ports differ from the loopback ones they
+# target — a wildcard bind collides with any loopback listener on the
+# same port. killswitch.sh scopes both to host/sandbox/LAN.
+socat TCP-LISTEN:3080,fork,reuseaddr TCP:127.0.0.1:3090 &   # dsh web UI
+socat TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:8081 &   # code-server
 
 exec python3 /app/api.py

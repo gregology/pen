@@ -92,6 +92,8 @@ services:
       # loopback listener. Bound to the LAN address only: reachable as
       # http://10.0.0.10:3080, closed on the host's other interfaces.
       - "10.0.0.10:3080:3080"
+      # code-server, same pattern (forwarder → agent's loopback :8081).
+      - "10.0.0.10:3081:3081"
     healthcheck:
       # "Healthy" = kill switch applied and API up (tunnel may still be
       # connecting; the API reports that in /status). CMD-SHELL because
@@ -128,8 +130,14 @@ services:
       # VPN control API — same namespace, so plain localhost.
       - VPN_API_URL=http://localhost:8080
       - VPN_API_TOKEN=${VPN_API_TOKEN}
+      # code-server login. Unset means code-server generates one into
+      # /home/user/pen/dsh-data/code-server/config.yaml.
+      - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD}
     volumes:
       - /home/user/pen/dsh-data:/data
+      # Shared with the host: AGENTS.md, test notes, anything Greg and
+      # the agent both edit. Also the code-server workspace.
+      - /home/user/pen/working:/working
     restart: unless-stopped
 
   # ------------------------------------------------------------------

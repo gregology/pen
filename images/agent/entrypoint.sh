@@ -9,6 +9,23 @@ if [ ! -f "$DSH_HOME/settings.yaml" ]; then
     cp /app/settings.seed.yaml "$DSH_HOME/settings.yaml"
 fi
 
+# Web VS Code for the shared working directory. Loopback only — the
+# gateway's forwarder is the sole LAN-facing listener, so the kill
+# switch's INPUT rules govern this port exactly like the DSH GUI.
+# Without CODE_SERVER_PASSWORD, code-server generates one into the
+# config file on the data mount.
+if [ -n "${CODE_SERVER_PASSWORD:-}" ]; then
+    export PASSWORD="$CODE_SERVER_PASSWORD"
+fi
+code-server \
+    --bind-addr 127.0.0.1:8081 \
+    --auth password \
+    --config /data/code-server/config.yaml \
+    --user-data-dir /data/code-server \
+    --disable-telemetry \
+    --disable-update-check \
+    /working &
+
 # The GUI is reached over the LAN as http://10.0.0.10:3080; the trust
 # fence 403s any Host authority not named here. dsh binds loopback :3090
 # because the gateway's GUI forwarder owns wildcard :3080.
