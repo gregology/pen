@@ -136,9 +136,26 @@ The security-critical component; build and test it first, alone.
 
 ### 3. agent image (`images/agent/`)
 
-- Base: Node 24 slim + `@deepseek-ai/dsh` installed globally, plus
-  baseline tools (nmap, curl, whois, dig, gobuster — kept minimal for
-  V1; nikto was dropped because it is absent from Debian bookworm main).
+- Base: Node 24 slim + `@deepseek-ai/dsh` installed globally, plus a
+  curated toolset in four groups, all Debian packages from
+  security-supported repos:
+  - **system** — procps, net-tools, iproute2, lsof, psmisc, file, less,
+    tree, bc, nano, vim-tiny, tzdata
+  - **network** — iputils-ping, traceroute, mtr-tiny, tcpdump,
+    netcat-openbsd, socat, telnet, openssh-client
+  - **assessment** — nmap, masscan, whatweb, dirb, sqlmap, hydra, john,
+    gobuster
+  - **dev/build** — git, python3 (+pip, venv), build-essential,
+    libssl-dev, jq, yq, ripgrep, fd-find, unzip, zip, p7zip-full,
+    xz-utils, dos2unix, curl, whois, dnsutils
+  The slim base ships no procps and no iproute2, so this list is what
+  makes the agent usable for diagnostics at all. `nikto`, `seclists`, and
+  `wpscan` are absent from bookworm and deliberately not baked; add them
+  as pinned, hash-verified upstream releases if an engagement needs them.
+  Notes: Debian's `yq` is the Python jq-wrapper, not the Go implementation
+  (`fd` is symlinked from `fdfind` for the same reason `fdfind` is the
+  packaged name). `pip install` needs a venv — the system Python is
+  externally managed.
 - **code-server** (web VS Code), pinned to v4.137.0 and sha256-verified at
   build time. It opens `/working`, binds loopback `:8081`, and stores
   state on the data mount. The gateway forwards `:3081` to it under the
