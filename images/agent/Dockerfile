@@ -2,12 +2,24 @@ FROM node:24-bookworm-slim
 
 ARG CODE_SERVER_VERSION=4.137.0
 
-# Baseline recon tooling per the V1 plan — adding a tool is a package
-# here, not a special case anywhere else in the platform. nikto is
-# absent from bookworm main and deliberately not pulled from elsewhere
-# for V1.
+# The agent's tool surface. Everything here is a Debian package from a
+# security-supported repo: adding a tool is a line in this list, not a
+# special case anywhere else in the platform. The base is slim by design,
+# but "slim" means no procps and no iproute2 — an agent that cannot run
+# `uptime`, `ps`, or `ip` is crippled for diagnostics, so the appliance
+# carries a curated set rather than the distro's full catalogue.
+#   system      — process/system/file inspection the agent reaches for first
+#   network     — connectivity diagnosis and target access (ssh, not just curl)
+#   assessment  — scanners and offline cracking
+#   dev/build   — cloning and compiling PoCs, scripting, data wrangling
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap curl whois dnsutils gobuster ca-certificates \
+        procps net-tools iproute2 lsof psmisc file less tree bc nano vim-tiny tzdata \
+        iputils-ping traceroute mtr-tiny tcpdump netcat-openbsd socat telnet openssh-client \
+        masscan whatweb dirb sqlmap hydra john \
+        git python3 python3-pip python3-venv build-essential libssl-dev \
+        jq yq ripgrep fd-find unzip zip p7zip-full xz-utils dos2unix \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
 # Web VS Code over the shared working directory. Pinned and hash-verified:
