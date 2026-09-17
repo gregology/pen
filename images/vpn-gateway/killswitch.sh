@@ -9,10 +9,11 @@ set -eu
 API_PORT="${VPN_API_PORT:-8080}"
 
 # wg-quick's policy routing (suppress_prefixlength + not-fwmark rules)
-# diverts LAN-bound replies into the tunnel. Consult table main for LAN
-# destinations first so the GUI stays reachable while the tunnel is up.
+# diverts LAN-bound replies into the tunnel, and it claims rule
+# priorities just ahead of whatever already exists — so this rule takes
+# priority 100, far earlier than anything wg-quick allocates.
 : "${LAN_CIDR:?required}"
-ip rule add to "$LAN_CIDR" lookup main priority 32760 2>/dev/null || true
+ip rule add to "$LAN_CIDR" lookup main priority 100 2>/dev/null || true
 
 iptables -F
 iptables -P INPUT ACCEPT
