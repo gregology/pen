@@ -137,25 +137,64 @@ The security-critical component; build and test it first, alone.
 ### 3. agent image (`images/agent/`)
 
 - Base: Node 24 slim + `@deepseek-ai/dsh` installed globally, plus a
-  curated toolset in four groups, all Debian packages from
-  security-supported repos:
+  curated toolset in four groups:
   - **system** — procps, net-tools, iproute2, lsof, psmisc, file, less,
-    tree, bc, nano, vim-tiny, tzdata
+    tree, bc, nano, vim-tiny, tzdata, libxml2-utils
   - **network** — iputils-ping, traceroute, mtr-tiny, tcpdump,
-    netcat-openbsd, socat, telnet, openssh-client
+    netcat-openbsd, socat, telnet, openssh-client, openssl
   - **assessment** — nmap, masscan, whatweb, dirb, sqlmap, hydra, john,
-    gobuster
+    gobuster, hashcat (+PoCL), tshark, scapy
   - **dev/build** — git, python3 (+pip, venv), build-essential,
     libssl-dev, jq, yq, ripgrep, fd-find, unzip, zip, p7zip-full,
     xz-utils, dos2unix, curl, whois, dnsutils
-  The slim base ships no procps and no iproute2, so this list is what
-  makes the agent usable for diagnostics at all. `nikto`, `seclists`, and
-  `wpscan` are absent from bookworm and deliberately not baked; add them
-  as pinned, hash-verified upstream releases if an engagement needs them.
-  Notes: Debian's `yq` is the Python jq-wrapper, not the Go implementation
-  (`fd` is symlinked from `fdfind` for the same reason `fdfind` is the
-  packaged name). `pip install` needs a venv — the system Python is
-  externally managed.
+  The slim base ships no procps, no iproute2, and no python3, so this list
+  is what makes the agent usable for diagnostics at all. Notes: Debian's
+  `yq` is the Python jq-wrapper, not the Go implementation (`fd` is
+  symlinked from `fdfind` for the same reason `fdfind` is the packaged
+  name). `pip install` needs a venv — the system Python is externally
+  managed.
+- **The pentest toolchain on top of the base** (reasoning in
+  `TOOLSET-RESEARCH.md`, per-tool usage in `tools/`):
+  - **reconnaissance** — nuclei 3.11.1 (with nuclei-templates 10.4.9 baked
+    to `/root/nuclei-templates`), httpx 1.12.0, katana 1.7.0,
+    subfinder 2.16.0, dnsx 1.3.1, naabu 2.6.1
+  - **web** — ffuf 2.3.0, feroxbuster 2.13.1, dalfox 3.2.3, commix 4.1,
+    arjun 2.2.7, wafw00f 2.4.2, testssl.sh 3.2.4
+  - **supply chain** — trivy 0.74.0, trufflehog 3.97.5
+  - **exploitation** — Metasploit 6.5.3 (Rapid7 apt repo), impacket,
+    NetExec 1.5.1, pypykatz
+  - **traffic** — mitmproxy 11.0.0
+  - **wordlists** — SecLists, pinned by release tag at `/opt/wordlists/SecLists`
+  - Everything compiled or scripted is an upstream release with a
+    sha256 in the Dockerfile's `ARG`s, verified at build time. Debian
+    wins only where its version is current (`tshark`, `scapy`, `hashcat`)
+    or where a package is the only sane source. Python tools live in one
+    virtualenv (`/opt/pen-venv`) that is first on `PATH`.
+- **Three pins and a rename that are load-bearing**, each found by a real
+  failure during the build:
+  - `mitmproxy==11.0.0` — 11.1.0+ requires Python 3.12; bookworm has 3.11.
+  - `bcrypt==4.0.1` — passlib 1.7.4 (imported by mitmproxy at startup)
+    probes its bcrypt backend with a >72-byte password, which bcrypt 4.1+
+    rejects by raising. Unpinned, every mitmproxy entry point exits at
+    import with no usable message.
+  - `dploot<4` — NetExec declares `dploot>=3.1.0` with no upper bound;
+    dploot 4 moved its SMB module, so the unpinned install produces a
+    NetExec whose SMB protocol dies with `ModuleNotFoundError`. Its
+    version banner still prints, so only a real run reveals it.
+  - The venv's `httpx` console script is renamed `httpx-httpclient`,
+    because it otherwise shadows ProjectDiscovery's `httpx` binary on
+    `PATH` — two unrelated tools with the same name, and the network
+    mapper is the one that has to win. The library stays installed;
+    NetExec's dependency chain imports it.
+  - `commix` is installed from its upstream release, not PyPI: the
+    package published there under that name is an unrelated installer
+    stub with no scanner in it.
+- `nikto`, `wpscan`, and `exploitdb` remain absent from bookworm and are
+  deliberately not baked; the recommended toolset covers their cases.
+  If an engagement needs one, add it as a pinned, hash-verified upstream
+  release rather than a `pip install` of a name that looks right.
+- `john` is Debian's **core** build, not jumbo: crypt(3)-family formats
+  only, no `*2john` helpers, no NTLM. Hashcat covers everything else.
 - **code-server** (web VS Code), pinned to v4.137.0 and sha256-verified at
   build time. It opens `/working`, binds loopback `:8081`, and stores
   state on the data mount. The gateway forwards `:3081` to it under the
