@@ -48,27 +48,36 @@ def list_nodes():
 
 
 def write_active_config(name):
-    # wg-quick aborts on DNS= lines when resolvconf is absent; DNS is
-    # pinned at the compose level, so provider DNS lines are stripped.
+    # Two rewrites, both about agreement:
+    # - DNS= lines are stripped (wg-quick aborts without resolvconf; DNS
+    #   is pinned at the compose level).
+    # - The Endpoint hostname is resolved here and rewritten to the IP
+    #   literal. Provider hostnames are clusters with many A records, and
+    #   wg setconf resolves the name independently — if it picked a
+    #   different IP than the firewall's endpoint exception, the handshake
+    #   would be dropped by the kill switch. One resolution, one IP, both
+    #   consumers.
+    endpoint = None
+    out = []
     with open(os.path.join(CONFIG_DIR, name + ".conf")) as f:
-        lines = [ln for ln in f if not ln.strip().startswith("DNS")]
-    with open(ACTIVE_CONF, "w") as f:
-        f.writelines(lines)
-    os.chmod(ACTIVE_CONF, 0o600)
-
-
-def resolve_endpoint():
-    host = port = None
-    with open(ACTIVE_CONF) as f:
         for line in f:
-            match = re.match(r"\s*Endpoint\s*=\s*(\S+):(\d+)\s*$", line)
+            if line.strip().startswith("DNS"):
+                continue
+            match = re.match(r"(\s*Endpoint\s*=\s*)(\S+):(\d+)\s*$", line)
             if match:
-                host, port = match.group(1), int(match.group(2))
-    if host is None:
+                host, port = match.group(2), int(match.group(3))
+                ip = socket.getaddrinfo(
+                    host, port, socket.AF_INET, socket.SOCK_DGRAM
+                )[0][4][0]
+                endpoint = (ip, port)
+                line = f"{match.group(1)}{ip}:{port}\n"
+            out.append(line)
+    if endpoint is None:
         raise ValueError("config has no Endpoint")
-    # WireGuard is UDP-only, so a single AF_INET answer suffices.
-    ip = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_DGRAM)[0][4][0]
-    return ip, port
+    with open(ACTIVE_CONF, "w") as f:
+        f.writelines(out)
+    os.chmod(ACTIVE_CONF, 0o600)
+    return endpoint
 
 
 def allow_endpoint(ip, port):
@@ -107,9 +116,8 @@ def tunnel_up(name):
     global current_node
     with node_lock:
         try:
-            write_active_config(name)
-            ip, port = resolve_endpoint()
-        except (OSError, ValueError) as exc:
+            ip, port = write_active_config(name)
+        except (OSError, ValueError, socket.gaierror) as exc:
             return False, f"config error: {exc}"
 
         # Down before up, and the endpoint exception is replaced before the
