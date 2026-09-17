@@ -85,7 +85,8 @@ keeping secrets out of the agent container.
 | LLM logging in a separate proxy | Audit logs must be outside the audited component's control. |
 | Split LLM egress from general egress | LLM traffic does not need VPN anonymization (it's authenticated API traffic to providers); routing it separately keeps VPN bandwidth for attack traffic and makes audit logs cleaner. |
 | Human confirmation for scope expansion | Autonomous expansion of attack surface is where white-hat tools stop being white-hat. |
-| GUI exposed via a loopback forwarder in the gateway, not `--host 0.0.0.0` | `dsh web` rejects 0.0.0.0 by design (remote-code-execution exposure); a scoped socat forwarder plus iptables keeps the GUI reachable from the LAN without weakening DSH's trust model. The port binds the host's LAN address only, and the agent passes `--trusted-host` for that authority so the browser-trust fence accepts it. |
+| GUI exposed via a loopback forwarder in the gateway, not `--host 0.0.0.0` | The web UIs (DSH, code-server) reject wildcard binds by design (remote-code-execution exposure); scoped socat forwarders plus iptables keep them reachable from the LAN without weakening the tools' own trust models. The ports bind the host's LAN address only, and DSH is given `--trusted-host` for that authority so its browser-trust fence accepts it. |
+| A shared working directory (`/home/user/pen/working` ↔ `/working`) | Test notes, `AGENTS.md`, and results need to be one set of files that Greg and the agent both edit — in a web editor and in the agent's own tools — rather than copied between host and container. |
 
 ## V1 scope
 

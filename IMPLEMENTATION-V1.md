@@ -139,6 +139,17 @@ The security-critical component; build and test it first, alone.
 - Base: Node 24 slim + `@deepseek-ai/dsh` installed globally, plus
   baseline tools (nmap, curl, whois, dig, gobuster — kept minimal for
   V1; nikto was dropped because it is absent from Debian bookworm main).
+- **code-server** (web VS Code), pinned to v4.137.0 and sha256-verified at
+  build time. It opens `/working`, binds loopback `:8081`, and stores
+  state on the data mount. The gateway forwards `:3081` to it under the
+  same iptables rules as the DSH GUI. Login password comes from
+  `CODE_SERVER_PASSWORD`; unset, code-server generates one into
+  `/home/user/pen/dsh-data/code-server/config.yaml`. Extensions come from
+  Open VSX, not Microsoft's marketplace.
+- `/working` is the shared working directory (host
+  `/home/user/pen/working`): `AGENTS.md`, test notes, and anything Greg
+  and the agent both edit. It is the DSH workspace root and the
+  code-server folder, so both see the same files.
 - `settings.seed.yaml` is copied to `$DSH_HOME/settings.yaml` on first
   boot: exactly one provider, `llm-proxy`, with the twelve namespaced
   model aliases. `$DSH_HOME` lives on the host bind mount so the GUI
@@ -154,7 +165,7 @@ The security-critical component; build and test it first, alone.
 1. Clone this repo to `/home/user/pen` on host01 and create the runtime
    directories (WireGuard configs go in `vpn-configs/`, chmod 600 — they
    contain private keys, never commit them):
-   `mkdir -p /home/user/pen/{vpn-configs,llm-logs,dsh-data}`
+   `mkdir -p /home/user/pen/{vpn-configs,llm-logs,dsh-data,working}`
 2. Build the custom images on the host (re-run after every repo change
    to `images/`):
    `docker build -t pen/vpn-gateway:v1 /home/user/pen/images/vpn-gateway`
@@ -163,7 +174,8 @@ The security-critical component; build and test it first, alone.
    or the UI, compose path `docker-compose.yml`.
 4. Set stack environment variables in Portainer:
    `VPN_API_TOKEN`, `LITELLM_MASTER_KEY`, `KIMI_CODING_API_KEY`,
-   `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `GAMING_RIG_API_KEY`.
+   `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `GAMING_RIG_API_KEY`,
+   `CODE_SERVER_PASSWORD` (new; generate one).
 5. Deploy. Note: this Portainer version records the stack with
    `GitConfig: null`, so later compose changes are applied by PUT-ing the
    whole file back (preserving Env), not by "pull and redeploy".
