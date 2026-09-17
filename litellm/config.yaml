@@ -82,6 +82,21 @@ model_list:
       api_base: http://10.0.0.21:8080/v1
       api_key: os.environ/GAMING_RIG_API_KEY
       stream_timeout: 1800
+  # The "-unc" upstream IDs are llama-swap's primary IDs for the
+  # abliterated builds; "qwen3.8-flash-next-uncensored" and
+  # "qwen3.8-27b-uncensored" are aliases of the same entries.
+  - model_name: gaming-rig/qwen38-unc
+    litellm_params:
+      model: openai/qwen38-unc
+      api_base: http://10.0.0.21:8080/v1
+      api_key: os.environ/GAMING_RIG_API_KEY
+      stream_timeout: 1800
+  - model_name: gaming-rig/qwen38-27b-unc
+    litellm_params:
+      model: openai/qwen38-27b-unc
+      api_base: http://10.0.0.21:8080/v1
+      api_key: os.environ/GAMING_RIG_API_KEY
+      stream_timeout: 1800
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

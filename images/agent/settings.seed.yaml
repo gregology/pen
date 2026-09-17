@@ -59,3 +59,11 @@ llm-pi-ai:
           name: GLM 5.3 Flash (local)
           contextWindow: 128000
           maxTokens: 32000
+        - id: gaming-rig/qwen38-unc
+          name: Qwen 3.8 Flash Next Uncensored (local)
+          contextWindow: 131072
+          maxTokens: 32000
+        - id: gaming-rig/qwen38-27b-unc
+          name: Qwen 3.8 27B Uncensored (local)
+          contextWindow: 262144
+          maxTokens: 32000
