@@ -5,7 +5,7 @@ FROM node:24-bookworm-slim
 # absent from bookworm main and deliberately not pulled from elsewhere
 # for V1.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nmap curl whois dnsutils gobuster \
+        nmap curl whois dnsutils gobuster ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @deepseek-ai/dsh@0.1.5-rc.1
