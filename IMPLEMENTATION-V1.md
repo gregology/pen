@@ -149,7 +149,18 @@ The security-critical component; build and test it first, alone.
 - `/working` is the shared working directory (host
   `/home/user/pen/working`): `AGENTS.md`, test notes, and anything Greg
   and the agent both edit. It is the DSH workspace root and the
-  code-server folder, so both see the same files.
+  code-server folder, so both see the same files. The host directory is
+  group 1000 with the setgid bit, and the container runs as `0:1000` with
+  `umask 002`, so agent-written files are group-writable — no sudo needed
+  on the host side.
+- `DSH_PERMISSION_MODE=danger-full-access`: DSH's bubblewrap-backed bash
+  sandbox cannot create namespaces inside this container (tested plain,
+  `seccomp=unconfined`, `SYS_ADMIN`, `SYS_ADMIN + apparmor=unconfined` —
+  all denied; only `--privileged` would work, and that is a worse trade
+  than losing an in-container sandbox that the network topology already
+  makes redundant). Root uid is kept deliberately: Docker grants no
+  ambient capabilities to a non-root process, so a uid change would
+  silently cost nmap's SYN/UDP scans and OS detection.
 - `settings.seed.yaml` is copied to `$DSH_HOME/settings.yaml` on first
   boot: exactly one provider, `llm-proxy`, with the twelve namespaced
   model aliases. `$DSH_HOME` lives on the host bind mount so the GUI
