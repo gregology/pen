@@ -37,8 +37,12 @@ services:
   # namespace, so this container's iptables IS the agent's perimeter.
   # ------------------------------------------------------------------
   vpn-gateway:
-    build: ./images/vpn-gateway
+    # Pre-built on the host (docker build -t pen/vpn-gateway:v1
+    # /home/user/pen/images/vpn-gateway). Portainer's `build:` support
+    # clones stale snapshots into its own project dir; host-built images
+    # are the house convention for custom images.
     image: pen/vpn-gateway:v1
+    pull_policy: never
     container_name: vpn-gateway
     cap_add:
       - NET_ADMIN          # required for wg-quick + iptables
@@ -95,8 +99,9 @@ services:
   # namespace. Its only peers are llm-proxy and the gateway API.
   # ------------------------------------------------------------------
   agent:
-    build: ./images/agent
+    # Pre-built on the host, same convention as vpn-gateway.
     image: pen/agent:v1
+    pull_policy: never
     container_name: agent
     network_mode: service:vpn-gateway
     depends_on:
