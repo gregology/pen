@@ -109,6 +109,11 @@ services:
     pull_policy: never
     container_name: agent
     network_mode: service:vpn-gateway
+    # The agent shares a namespace attached to both networks, so Docker's
+    # embedded DNS can resolve llm-proxy to its egress IP — which the kill
+    # switch rightly blocks. This pins the name to the sandbox path.
+    extra_hosts:
+      - "llm-proxy:172.30.0.3"
     depends_on:
       vpn-gateway:
         condition: service_healthy   # never start before the kill switch
@@ -135,8 +140,10 @@ services:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: llm-proxy
     networks:
-      - sandbox            # agent reaches it here
-      - egress             # provider calls leave directly (no VPN —
+      # Sandbox IP pinned: the agent's extra_hosts entry points here.
+      sandbox:
+        ipv4_address: 172.30.0.3
+      egress:              # provider calls leave directly (no VPN —
                            # authenticated API traffic, per DESIGN.md).
                            # gaming-rig (10.0.0.21) is reached on the LAN
                            # via the host's route from this bridge.

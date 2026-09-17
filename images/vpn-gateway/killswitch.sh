@@ -8,6 +8,12 @@ set -eu
 : "${DNS_SERVERS:?required}"
 API_PORT="${VPN_API_PORT:-8080}"
 
+# wg-quick's policy routing (suppress_prefixlength + not-fwmark rules)
+# diverts LAN-bound replies into the tunnel. Consult table main for LAN
+# destinations first so the GUI stays reachable while the tunnel is up.
+: "${LAN_CIDR:?required}"
+ip rule add to "$LAN_CIDR" lookup main priority 32760 2>/dev/null || true
+
 iptables -F
 iptables -P INPUT ACCEPT
 iptables -P FORWARD DROP
@@ -43,7 +49,6 @@ iptables -A INPUT -p tcp --dport "$API_PORT" -j DROP
 # The GUI forwarder answers the LAN (Docker DNAT preserves the real
 # client source IP), the host via either bridge, and the sandbox —
 # never the tunnel.
-: "${LAN_CIDR:?required}"
 iptables -A INPUT -p tcp --dport 3080 -s "$SANDBOX_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport 3080 -s "$EGRESS_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport 3080 -s "$LAN_CIDR" -j ACCEPT
