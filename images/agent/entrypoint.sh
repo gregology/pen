@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+# The container runs as gid 1000 so the shared working directory stays
+# editable from the host without sudo; the umask keeps new files
+# group-writable.
+umask 002
+
 # Seed the harness config once. Editing afterwards happens on the host
 # bind mount; even a hostile edit cannot restore direct provider access
 # because the kill switch only permits traffic to the sandbox network.

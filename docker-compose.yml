@@ -117,6 +117,12 @@ services:
     pull_policy: never
     container_name: agent
     network_mode: service:vpn-gateway
+    # Root uid keeps the toolchain intact — nmap's SYN/UDP scans and OS
+    # detection need real root, and Docker does not give ambient
+    # capabilities to a non-root process. gid 1000 with umask 002 in the
+    # entrypoint makes everything written under /working group-writable
+    # for Greg's host user, so the shared directory needs no sudo.
+    user: "0:1000"
     depends_on:
       vpn-gateway:
         condition: service_healthy   # never start before the kill switch
@@ -133,6 +139,12 @@ services:
       # code-server login. Unset means code-server generates one into
       # /home/user/pen/dsh-data/code-server/config.yaml.
       - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD}
+      # DSH's bash sandbox is bubblewrap-backed, and bwrap cannot create
+      # namespaces inside this container without --privileged (tested:
+      # plain, seccomp=unconfined, SYS_ADMIN, SYS_ADMIN+apparmor all
+      # denied). Unconfined bash inside the container preserves the
+      # platform's actual boundary, which is the network topology.
+      - DSH_PERMISSION_MODE=danger-full-access
     volumes:
       - /home/user/pen/dsh-data:/data
       # Shared with the host: AGENTS.md, test notes, anything Greg and
