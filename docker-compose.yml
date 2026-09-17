@@ -150,6 +150,10 @@ services:
       # Shared with the host: AGENTS.md, test notes, anything Greg and
       # the agent both edit. Also the code-server workspace.
       - /home/user/pen/working:/working
+      # Per-tool operator documentation, read-only. A separate mount rather
+      # than a symlink under working/: a link would resolve against the
+      # container's filesystem, where the host repo path does not exist.
+      - /home/user/pen/tools:/working/tools:ro
     restart: unless-stopped
 
   # ------------------------------------------------------------------
