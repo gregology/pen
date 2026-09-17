@@ -187,6 +187,27 @@ Each test maps to a design guarantee:
 | Audit trail | Run a DSH session against each provider alias; confirm every LLM request/response appears in `/home/user/pen/llm-logs/audit.jsonl`, including ones the agent might prefer to hide. |
 | Kill switch survives restart | `docker restart vpn-gateway`; repeat leak test before and after tunnel recovery. |
 
+### Results — 2026-09-17, host01 (all pass)
+
+- **Leak**: tunnel forced down; agent egress timed out. Mid-rotation probe
+  during a healthy switch: 60 probes, 59 answered by VPN exits (old node,
+  then new node), 1 blocked in the gap, zero home-IP responses.
+- **Attribution**: exit IPs are Surfshark exits (verified vs. home IP by
+  blind on-host comparison).
+- **Rotation**: au-adl → de-fra → jp-tok → uk-man → us-buf, distinct
+  geo-correct exit IP each time. (Found and fixed en route: cluster
+  hostnames must be pinned to one resolved IP in the active config, or
+  `wg setconf` and the firewall disagree and the tunnel dies mid-rotation.)
+- **Containment**: agent cannot reach the LAN router, host01's LAN IP, the
+  egress bridge gateway, or llm-proxy's egress address; llm-proxy (sandbox
+  path) and the tokened gateway API respond; bad token → 401.
+- **Audit trail**: calls as the agent logged with messages, response, and
+  the requested alias (`zai/glm-5.3-flash` vs upstream `glm-5.3-flash`).
+- **Restart**: 20/20 egress probes blocked during the gateway restart gap;
+  tunnel auto-recovered to the first config; GUI and proxy path healthy
+  after. (Note: restarting vpn-gateway replaces the shared netns — the
+  agent must be restarted too.)
+
 ## Explicitly out of scope for V1
 
 - Target allow-listing at the gateway (scope control stays a human/agent

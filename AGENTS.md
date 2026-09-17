@@ -20,7 +20,7 @@ The full architecture and rationale live in `DESIGN.md`; the build plan and veri
 
 ## Current phase
 
-**V1, implemented but undeployed.** All code and config exist: `docker-compose.yml`, `litellm/`, `images/vpn-gateway/` (kill switch, control API, GUI forwarder), `images/agent/` (DSH + baseline tools, seeded single-provider config). Nothing is deployed, so every shape in the repo can still change in place. Remaining: host prep (`/home/user/pen/` directories, WireGuard configs, Portainer stack env), deployment via Portainer Git stack, and the verification checklist in `IMPLEMENTATION-V1.md` — which is the V1 test suite and must pass before the platform is trusted.
+**V1, deployed and verified.** Stack `pen` (id 177) runs on host01 (Portainer env 16); the full verification checklist in `IMPLEMENTATION-V1.md` passed on 2026-09-17. GUI at `http://10.0.0.10:3080`. Custom images are host-built from `/home/user/pen/images/*` (Portainer builds go stale — its stack redeploys overwrite tags from a creation-time snapshot). Update procedure: push to main → `git -C /home/user/pen pull` on host01 → rebuild affected image(s) → PUT the compose file back to stack 177 preserving Env (or Portainer UI). Shape changes now need migration care — the stack is live.
 
 ## Hard limits
 
@@ -61,12 +61,12 @@ Prefer a seam you can grow through (an API endpoint, a config record, an alias t
 
 Do not preserve an old shape "just in case". Dead code, legacy fields, and compat shims are liabilities, not assets.
 
-- V1 is not deployed. No consumer depends on the compose file, the control API shape, or the litellm config. Edit them directly: no version bumps, no deprecated endpoints kept around, no shims.
+- The stack is live, but the only consumers are this repo's own containers. Edit shapes directly: no version bumps, no deprecated endpoints kept around, no shims.
 - When an interface changes, migrate every consumer and document (`DESIGN.md`, `IMPLEMENTATION-V1.md`, compose comments), then delete the old path. Two live ways to do one thing is worse than a temporary broken window — and in a security platform, an undocumented second path is an audit gap.
 
 ### 4. Larger refactors beat quick fixes
 
-A small patch that papers over a structural problem is worse than a larger change that removes it. Nothing is deployed yet; structure will never be cheaper to fix than it is now.
+A small patch that papers over a structural problem is worse than a larger change that removes it. The stack is young; structure will never be cheaper to fix than it is now.
 
 - One clean refactor that removes a class of problem beats many one-line `if`s accumulated over time.
 - Do not gold-plate. A refactor is justified when it removes real duplication, a real type code, or a real god object, not to satisfy taste.
