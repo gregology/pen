@@ -266,6 +266,52 @@ Each test maps to a design guarantee:
 | Audit trail | Run a DSH session against each provider alias; confirm every LLM request/response appears in `/home/user/pen/llm-logs/audit.jsonl`, including ones the agent might prefer to hide. |
 | Kill switch survives restart | `docker restart vpn-gateway`; repeat leak test before and after tunnel recovery. |
 
+### Re-verified after the toolchain deploy — 2026-09-17 (all pass)
+
+The toolchain image was deployed by replacing the `agent` (and, as a
+dependency, `vpn-gateway`) container from the repo compose file. Two
+procedure corrections came out of it, both recorded here because the naive
+form of each test damages the platform rather than testing it:
+
+- **The leak test must not use `wg-quick` on the exit-node config.** The API
+  brings the tunnel up from `/run/wg0.conf`, where the basename is what names
+  the interface (`wg0`) and the `DNS=` lines are stripped. Running
+  `wg-quick up /vpn/configs/<node>.conf` directly creates a *second*
+  interface named after the file and lets `resolvconf` overwrite
+  `/etc/resolv.conf` with the provider's resolvers — which the kill switch
+  then blocks, so the container loses DNS and every probe times out for the
+  wrong reason. Drop the link instead:
+
+  ```
+  docker exec vpn-gateway ip link set wg0 down     # tunnel down, config intact
+  # ... probe from the agent: every attempt must fail ...
+  docker exec vpn-gateway ip link set wg0 up
+  ```
+
+- **The API reports `tunnel: up` from the interface alone.** After a link
+  flap the interface is up but the WireGuard socket does not re-handshake,
+  so `/status` says `up` while every packet is dropped. Confirm recovery with
+  a fresh handshake age, not the state string, and recover by rotating nodes
+  through `POST /switch` (which does a full down-then-up) rather than by
+  toggling the link.
+
+- **A blank `VPN_API_TOKEN` makes the control API accept an empty bearer.**
+  Observed while recreating the stack with an env that resolved blank: the
+  handler compares against its own token, so an empty value matches an empty
+  header. The publish path cannot produce this (the token is supplied per
+  deploy), but any procedure that recreates the gateway outside Portainer
+  must carry the existing environment forward or the API briefly becomes
+  unauthenticated to everything on the sandbox network. Verify with
+  `no-auth=401` after any gateway recreate.
+
+Results: leak test 10/10 blocked with zero home-IP answers; attribution via
+an Adelaide exit (`103.214.20.198`) distinct from the home line; rotation to
+`nz-akl` and back clean; containment unchanged (LAN, egress bridge, and peer
+addresses all refused; llm-proxy healthy on the sandbox path); audit trail
+extended by a live chat completion; GUI 401 and code-server 302 on
+`10.0.0.10`; all 29 tools present and the 27 doc directories readable at
+`/working/tools`.
+
 ### Results — 2026-09-17, host01 (all pass)
 
 - **Leak**: tunnel forced down; agent egress timed out. Mid-rotation probe
