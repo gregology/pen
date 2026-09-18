@@ -6,8 +6,8 @@ return?" It is the probing layer that turns a port list into a target list —
 status codes, titles, tech stack, server banners, TLS details, favicons, CDN
 and ASN, in JSONL. Nothing else in the toolchain does that breadth in one pass.
 
-This is **not** the Python `httpx` library. `python3 -c 'import httpx'` is a
-different project; this document describes ProjectDiscovery's binary.
+This is **not** the Python `httpx` library; that package is not installed in this
+image, so bare `httpx` always runs ProjectDiscovery's binary.
 
 ## Installation and location
 
@@ -22,21 +22,15 @@ httpx caches nothing between runs except the resume file and the filtered
 error-page path (`filtered_error_page.json`, written to the working directory).
 It streams input and does not need a target file on disk.
 
-**If `httpx -version` prints `Usage: httpx [OPTIONS] URL`, you are running the
-wrong program.** The image puts a Python virtualenv first on `PATH`
-(`ENV PATH="/opt/venvs/httpx/bin:$PATH"`), and that virtualenv used to carry the
-console script for the Python `httpx` library 0.28.1 — a transitive dependency
-of the Python tooling. The build now renames that script to `httpx-httpclient`,
-so bare `httpx` resolves to `/usr/local/bin/httpx` as intended. Verify before
-trusting a pipeline:
+There is no Python venv and no Python `httpx` package in this image: `python3 -c
+'import httpx'` raises `ModuleNotFoundError`, and `/opt/venvs/httpx` does not
+exist. httpx is the pinned upstream release binary at `/usr/local/bin/httpx`, so
+nothing shadows it — verify before trusting a pipeline:
 
 ```bash
 command -v httpx        # expect /usr/local/bin/httpx
 httpx -version -duc     # expect "[INF] Current Version: v1.12.0"
 ```
-
-If it resolves into `/opt/venvs/httpx/bin`, use `/usr/local/bin/httpx` explicitly
-for every command until the image is rebuilt.
 
 ```bash
 httpx -ldv -duc       # the internal output-field vocabulary
@@ -174,7 +168,7 @@ tries HTTPS first and falls back to HTTP unless `-nf`/`-nfs` change that.
 |---|---|
 | `-json, -j` | JSONL to stdout. The pipeline format. |
 | `-o, -output <file>` | Write results to a file. |
-| `-oa, -output-all` | Write results in every format. |
+| `-oa, -output-all` | Write results in every format; requires `-o` (omitting it fails with `[FTL] Please specify an output file`) |
 | `-silent` | Results only; no banner or progress. |
 | `-nc, -no-color` | No ANSI colour. |
 | `-csv` | CSV output. |
@@ -200,7 +194,7 @@ tries HTTPS first and falls back to HTTP unless `-nf`/`-nfs` change that.
 | `-fhr, -follow-host-redirects` | Follow redirects on the same host only. |
 | `-maxr, -max-redirects <n>` | Redirect limit (default 10). |
 | `-rhsts, -respect-hsts` | Respect HSTS on redirect requests. |
-| `-random-agent` | Random User-Agent. **Default true.** |
+| `-random-agent` | Random User-Agent. **Default true**, and it overrides a `-H 'User-Agent: …'` you set (see *Limits*). |
 | `-auto-referer` | Set Referer to the current URL. |
 | `-sni, -sni-name <name>` | Custom TLS SNI name. |
 | `-r, -resolvers <list>` | Custom resolvers (file or comma-separated). |
@@ -320,7 +314,7 @@ The fields that matter day to day:
 | `.host` / `.port` / `.scheme` / `.path` | Parsed components. |
 | `.host_ip` | Resolved IP. |
 | `.a` | Resolved A records (array). |
-| `.cdn` / `.cdn_name` / `.cdn_type` | CDN detection. On by default. |
+| `.cdn` / `.cdn_name` / `.cdn_type` | CDN detection; present only when a CDN match is found. |
 | `.location` | Redirect target. |
 | `.final_url` | URL after redirects (when following). |
 | `.time` | Response time. |
@@ -397,14 +391,16 @@ subfinder -d "$DOMAIN" -silent -duc \
 
 ## Limits, failure modes and gotchas
 
-- **Check which `httpx` you are running.** If `httpx -version` prints
-  `Usage: httpx [OPTIONS] URL`, you have the Python client, not this tool. See
+- **Check which `httpx` you are running.** `command -v httpx` must print
+  `/usr/local/bin/httpx` and `httpx -version` must print the version banner; a
+  `Usage: httpx [OPTIONS] URL` reply means a different program answered. See
   *Installation and location*.
 - **Scheme fallback is silent.** Given a bare host, httpx tries HTTPS then HTTP.
   A result with `.url` starting `http://` means HTTPS failed, which is itself a
   finding worth noting.
-- **`-cdn` is on by default**, so `cdn_name` appears in output you did not ask
-  for. It also means response fields reflect the CDN, not the origin.
+- **`-cdn` is on by default**, so `cdn_name` appears when a CDN match is found;
+  it is not emitted for every target. It also means response fields reflect the
+  CDN, not the origin.
 - **`-mc` and `-fc` interact.** Passing both is legal; the filter wins after the
   matcher. Keep one direction explicit to avoid confusion.
 - **`-t` is threads, not timeout.** `-timeout` is seconds. In nuclei, `-t` is
@@ -418,8 +414,11 @@ subfinder -d "$DOMAIN" -silent -duc \
   `-probe` and the `error` field.
 - **`-lof` does not filter fields.** It prints the available field names. Use
   `-eof` to drop fields or `jq` to select them.
-- **`-random-agent` is on by default.** If a target behaves differently for a
-  known user agent, set `-H 'User-Agent: ...'` explicitly.
+- **`-random-agent` is on by default and wins over `-H`.** In the 1.12.0 build
+  audited here `-H 'User-Agent: FIXED-UA'` still sent one random agent, and so
+  did `-random-agent=false -H 'User-Agent: FIXED-UA'`. If a target behaves
+  differently for a known user agent, confirm the header that actually arrived
+  (a header-counting local server) before relying on it.
 - **Headless screenshots are unverified in this image.** `-ss` downloads a
   Chromium build via go-rod into `/root/.cache/rod/browser/`. The shared
   libraries Chromium needs (`libnss3`, `libnspr4`, `libatk*`, `libcups`,

@@ -9,17 +9,9 @@ export WORK=/working/engagements/example
 mkdir -p "$WORK"
 ```
 
-**Check which binary you are running.** The venv on `PATH` used to ship the
-Python `httpx` console script (now renamed `httpx-httpclient`), so a bare
-`httpx` would run the wrong program:
-
-```bash
-$ httpx -version
-Usage: httpx [OPTIONS] URL
-Error: No such option '-e'.
-```
-
-Correct on the current image:
+**Check which binary you are running.** There is no Python `httpx` package or
+venv in this image and nothing shadows the upstream binary, so verify the path
+before trusting a pipeline:
 
 ```bash
 $ command -v httpx
@@ -27,9 +19,6 @@ $ command -v httpx
 $ httpx -version -duc
 [INF] Current Version: v1.12.0
 ```
-
-If `command -v httpx` points into `/opt/venvs/httpx/bin`, substitute
-`/usr/local/bin/httpx` for every `httpx` below.
 
 ## 1. Stand up a target you are allowed to hammer
 
