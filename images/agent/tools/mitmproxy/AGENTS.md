@@ -11,7 +11,7 @@ addon script covers capture, replay, filtering, and rewriting without either.
 
 | | |
 |---|---|
-| Version | 11.0.0 (`mitmdump --version` → `Mitmproxy: 11.0.0 / Python: 3.11.2 / OpenSSL: 3.2.2`) |
+| Version | 11.0.0 (`mitmdump --version` → `Mitmproxy: 11.0.0 / Python: 3.11.2 / OpenSSL: OpenSSL 3.3.2 3 Sep 2024`) |
 | Binaries | `/opt/venvs/mitmproxy/bin/{mitmdump,mitmproxy,mitmweb}` (virtualenv `/opt/venvs/mitmproxy`, first on `PATH`) |
 | Certificates | `~/.mitmproxy/` by default, or `--set confdir=DIR` |
 | CA files | `mitmproxy-ca.pem` (private key — sensitive), `mitmproxy-ca.p12`, `mitmproxy-ca-cert.pem`, `mitmproxy-ca-cert.cer`, `mitmproxy-ca-cert.p12`, `mitmproxy-dhparam.pem` |
@@ -61,7 +61,7 @@ impacket resolve their own dependencies independently and are unaffected.
 |---|---|
 | `-p, --listen-port PORT` | Proxy port (default 8080 — check for a clash) |
 | `-w, --save-stream-file PATH` | Write flows as they arrive; prefix `+` to append, strftime patterns are expanded |
-| `-r, --read-flow-file PATH` | Read flows from a file instead of listening |
+| `-r, --rfile PATH` | Read flows from a file instead of listening |
 | `-n, --no-server` | Don't start a proxy (use with `-r`) |
 | `-s, --scripts FILE` | Load an addon script (repeatable) |
 | `-m, --mode MODE` | `regular` (default), `transparent`, `socks5`, `reverse:SPEC`, `upstream:SPEC`, `wireguard[:PATH]` |
@@ -101,7 +101,7 @@ mitmproxy's flowfilter documentation.
    mkdir -p "$WORK/mitm" "$WORK/mitm-ca"
    mitmdump -q -w "$WORK/mitm/session.mitm" --set confdir="$WORK/mitm-ca" -p 8888 &
    sleep 2
-   curl -s -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:8888 http://127.0.0.1:8080/
+   curl -s -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:8888 http://127.0.0.1:8090/
    curl -s -o /dev/null -w '%{http_code}\n' \
         --cacert "$WORK/mitm-ca/mitmproxy-ca-cert.pem" -x http://127.0.0.1:8888 https://example.com/
    kill %1
@@ -158,7 +158,7 @@ mitmproxy's flowfilter documentation.
    configuration:
 
    ```bash
-   mitmdump -q --mode reverse:http://127.0.0.1:8080 -p 9080 --set confdir="$WORK/mitm-ca"
+   mitmdump -q --mode reverse:http://127.0.0.1:8090 -p 9080 --set confdir="$WORK/mitm-ca"
    curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9080/       # 200
    ```
 
@@ -167,7 +167,7 @@ mitmproxy's flowfilter documentation.
 `--flow-detail 1` is one request line plus one response line per flow:
 
 ```
-127.0.0.1:45752: GET http://127.0.0.1:8080/ HTTP/1.1
+127.0.0.1:45752: GET http://127.0.0.1:8090/ HTTP/1.1
      << HTTP/1.0 200 OK 394b
 127.0.0.1:45754: GET https://example.com/ HTTP/2.0
      << HTTP/2.0 200 OK 559b
@@ -243,7 +243,7 @@ mitmdump -nr "$WORK/mitm/session.mitm" --flow-detail 1 2>/dev/null \
 mitmdump -nr "$WORK/mitm/session.mitm" --flow-detail 3 2>/dev/null > "$WORK/mitm/session.txt"
 curl -s -o /dev/null -w '%{http_code}\n' \
      --cacert "$WORK/mitm-ca/mitmproxy-ca-cert.pem" -x http://127.0.0.1:8888 \
-     -H 'Authorization: Bearer REDACTED' http://127.0.0.1:8080/
+     -H 'Authorization: Bearer REDACTED' http://127.0.0.1:8090/
 ```
 
 ```bash
@@ -267,7 +267,7 @@ traffic that a client trusts.
   `SIGINT`, not `SIGKILL` — before reading it or concluding nothing was captured.
 - **`mitmproxy` needs a TTY.** `< /dev/null mitmproxy` prints
   `Error: mitmproxy's console interface requires a tty. Please run mitmproxy in
-  an interactive shell environment.` and exits 1. The agent's shell has no TTY,
+  an interactive shell environment.` and exits 120. The agent's shell has no TTY,
   so the console tool is unusable.
 - **`mitmweb` needs a browser.** Its UI is a web app; there is no browser and no
   display in this container. The process starts and serves HTTP (verified `200`
@@ -297,8 +297,9 @@ traffic that a client trusts.
 - **CA trust is per client.** `curl --cacert` and `SSL_CERT_FILE` work (verified
   `200`); a client that does not trust the CA fails the handshake (verified
   `000`). Certificate pinning defeats the proxy entirely.
-- **Port clashes are easy.** The local test HTTP server also uses 8080, which is
-  mitmdump's default `-p`; pick distinct ports (`-p 8888`, target `8080`).
+- **Port clashes are easy.** mitmdump's default listen port is 8080, which this
+  container's VPN control API already holds, so always pass `-p` explicitly;
+  local fixtures use 8090 (`-p 8888`, target `8090`).
 - **Flow files are append-friendly but not pcap.** Use the `+` prefix
   (`-w +file.mitm`) to append, and convert with `mitmdump -nr in.mitm -w out.mitm`
   if you need a filtered copy.
