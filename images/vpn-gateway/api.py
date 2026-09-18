@@ -105,11 +105,32 @@ def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def default_gateway():
+    result = run(["ip", "route", "show", "default"])
+    fields = result.stdout.split()
+    return fields[fields.index("via") + 1]
+
+
 def keep_lan_on_main_table():
-    # Without this, wg-quick's not-fwmark rule diverts LAN-bound replies
-    # into the tunnel and the GUI goes dark while the tunnel is up.
+    # wg-quick's not-fwmark rule sends LAN-bound replies into the tunnel and
+    # claims rule priorities just ahead of whatever already exists, so the
+    # LAN rule only wins by being re-asserted after each bring-up. The rule
+    # is worthless without the route it consults: rotation can leave table
+    # main without LAN_CIDR, and a rule pointing at an empty table fails
+    # silently. The route goes via the gateway because the bridge does not
+    # proxy ARP — on-link, the next hop for a LAN client is unresolvable.
+    gateway = default_gateway()
+    run(["ip", "rule", "del", "to", LAN_CIDR, "lookup", "main",
+         "priority", str(LAN_RULE_PRIORITY)])
     run(["ip", "rule", "add", "to", LAN_CIDR, "lookup", "main",
          "priority", str(LAN_RULE_PRIORITY)])
+    try:
+        subprocess.run(
+            ["ip", "route", "replace", LAN_CIDR, "via", gateway],
+            check=True, capture_output=True, text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"api: LAN route not restored: {exc.stderr.strip()}")
 
 
 def tunnel_up(name):

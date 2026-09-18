@@ -89,7 +89,16 @@ The security-critical component; build and test it first, alone.
   is exactly one tunnel-management code path. Startup order is kill switch
   → API → tunnel (backgrounded): the API serves even while the tunnel is
   down, so `/status` can report the failure and `/switch` can retry.
-  Endpoints, authenticated by a shared bearer token:
+  Because rotation is what disturbs the namespace's routing, each bring-up
+  re-asserts both halves of the LAN exception, idempotently: the policy
+  rule at priority 90 *and* the `LAN_CIDR` route via the egress gateway in
+  table `main`. A rule pointing at a table that no longer holds the route
+  is a silent no-op — LAN-bound replies then fall through to the `wg0`
+  table and the GUIs go dark from the LAN while `/status` still reports the
+  tunnel healthy. The route is asserted *via* the gateway rather than left
+  on-link so the namespace never ARPs for an off-subnet client: the bridge
+  does not proxy ARP, so an on-link lookup dead-ends in `INCOMPLETE`
+  neighbour entries. Endpoints, authenticated by a shared bearer token:
   - `GET /status` → current node, tunnel state, handshake age, counters.
   - `GET /nodes` → config names found in `/vpn/configs`.
   - `POST /switch {"node": "<name>"}` → replace endpoint exception,
@@ -262,6 +271,7 @@ Each test maps to a design guarantee:
 | No home-IP leak | `docker exec vpn-gateway wg-quick down <cfg>`; from agent, `curl --max-time 5 https://ifconfig.me` must **fail**. |
 | Attribution | With tunnel up, agent's `curl https://ifconfig.me` returns the VPN exit IP, never the residential IP. |
 | Rotation works | `POST /switch` to each config; `ifconfig.me` after each switch shows the new exit; no leak window (run first test mid-rotation). |
+| GUIs survive rotation | `POST /switch`, then `curl` both `10.0.0.10:3080` and `:3081` from a LAN host other than the Docker host — the throwaway host-local `curl` those ports normally get proves nothing, because a host-local client is masqueraded to the bridge gateway and never needs a route back to the LAN. |
 | Containment | Agent cannot reach the egress network or host LAN directly (e.g., `curl` a host-only address must fail); only llm-proxy and the gateway API respond. |
 | Audit trail | Run a DSH session against each provider alias; confirm every LLM request/response appears in `/home/user/pen/llm-logs/audit.jsonl`, including ones the agent might prefer to hide. |
 | Kill switch survives restart | `docker restart vpn-gateway`; repeat leak test before and after tunnel recovery. |

@@ -82,6 +82,7 @@ keeping secrets out of the agent container.
 | Chokepoints enforced by network topology, not agent config | The agent is autonomous and runs untrusted-ish tooling; policy it could rewrite is not policy. |
 | Fail-closed VPN kill switch | A single leaked packet from the home IP undermines attribution control and exposes the operator. |
 | Exit-node rotation via API, driven by the agent | Rotation cadence is a tactical decision the agent can make (block evasion, geo-diversity); humans shouldn't babysit it. |
+| The LAN exception lives in the tunnel manager, not the kill switch | Bringing the tunnel down and up is what disturbs the namespace's routing, so the rule *and* the route that keeps LAN traffic on table `main` are re-asserted together after every bring-up. A rule without its route is a no-op that fails quietly, and a startup-only assertion leaves rotation — the common case — unprotected. |
 | LLM logging in a separate proxy | Audit logs must be outside the audited component's control. |
 | Split LLM egress from general egress | LLM traffic does not need VPN anonymization (it's authenticated API traffic to providers); routing it separately keeps VPN bandwidth for attack traffic and makes audit logs cleaner. |
 | Human confirmation for scope expansion | Autonomous expansion of attack surface is where white-hat tools stop being white-hat. |
