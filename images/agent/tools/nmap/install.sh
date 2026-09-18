@@ -9,4 +9,4 @@ set -eux -o pipefail
 # capabilities to a non-root process.
 apt_install nmap
 
-nmap --version | grep -m1 'Nmap version'
+verify_output 'Nmap version' nmap --version

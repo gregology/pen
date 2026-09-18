@@ -12,4 +12,4 @@ set -eux -o pipefail
 # exist here, so verification uses the help text.
 apt_install john
 
-john 2>&1 | grep -m1 'John the Ripper'
+verify_output 'John the Ripper' john

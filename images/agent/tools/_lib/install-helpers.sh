@@ -3,6 +3,34 @@
 
 say() { printf '\n[tool] %s\n' "$*"; }
 
+# Verify a tool by capturing its output and grepping the capture, never by
+# piping into the tool's output. Two failure modes make the pipeline form
+# unusable as a build gate, and both cost a full rebuild to discover:
+#
+#   1. An early-closing reader (`head`, or `grep -m1` which exits on its first
+#      match) closes the pipe while the tool is still writing. The tool dies on
+#      SIGPIPE, and `set -o pipefail` reports the build as failed even though
+#      the expected line was printed and matched.
+#   2. Several tools exit non-zero from their own --version/--help paths, so the
+#      pipeline status reflects the tool rather than the match.
+#
+# Capturing first leaves the tool free to finish, and the grep's own status is
+# then the only thing that decides the build. Usage:
+#
+#   verify_output 'Masscan version' masscan --version
+verify_output() {
+    local pattern="$1"; shift
+    local out=/tmp/verify-output.txt
+    "$@" > "$out" 2>&1 || true
+    if ! grep -q -- "$pattern" "$out"; then
+        echo "verify_output: '$pattern' not found in the output of: $*" >&2
+        tail -20 "$out" >&2
+        rm -f "$out"
+        return 1
+    fi
+    rm -f "$out"
+}
+
 apt_install() {
     apt-get update
     apt-get install -y --no-install-recommends "$@"
