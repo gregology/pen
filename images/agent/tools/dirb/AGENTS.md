@@ -6,8 +6,7 @@ name). It is installed for completeness and for its bundled server-specific
 wordlists, **not** as the content discovery tool of choice. For path
 brute-forcing use `gobuster`, `ffuf` or `feroxbuster`: dirb is single-threaded,
 has no JSON output, cannot read targets from stdin, and its upstream has not
-released since 2.22 (the man page in the Debian package is dated 2009; the last
-Debian change was 2020).
+released since 2.22 (the last Debian change was 2020).
 
 ## Install and location
 
@@ -34,7 +33,7 @@ Failure modes).
 | `-f` | Fine-tune the not-found detection by comparing body size as well as code. |
 | `-X <exts>` | Append extensions to every word, e.g. `-X .php,.bak`. |
 | `-x <exts_file>` | Same, with the extensions listed in a file. |
-| `-z <millisecs>` | Delay between requests in milliseconds. (The Debian man page's text for `-z` is wrong — it repeats the `-X` description; the source implements a delay.) |
+| `-z <millisecs>` | Delay between requests in milliseconds. (dirb's own usage output repeats the `-X` description for `-z`; the source implements a delay.) |
 | `-a <agent>` | Custom User-Agent (default is an IE6 string: `Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)`). |
 | `-c <cookies>` | Cookie header value. |
 | `-H <header>` | Extra request header; repeatable. |
@@ -50,8 +49,9 @@ Failure modes).
 
 Undocumented but parsed in 2.22: `-h <vhost>` (sends that Host header), `-s`
 (verify the peer's TLS certificate — verification is **off** by default),
-`-d <level>` (debug output). `-g`, `-m`, `-M` are accepted and do nothing;
-their implementations are commented out in the source.
+`-d <level>` (debug output). `-g` is active — the run prints `OPTION: Saving
+Found URLs to disk` — while `-m` and `-M` are not implemented: each aborts with
+`(!) FATAL: Incorrect parameter` and exit status 255.
 
 ## Examples
 
