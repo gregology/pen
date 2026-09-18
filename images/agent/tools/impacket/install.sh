@@ -15,5 +15,7 @@ python3 -m venv "$IMPACKET_VENV"
 "$IMPACKET_VENV/bin/pip" install --no-cache-dir impacket
 
 expose_venv "$IMPACKET_VENV"
-test -x /usr/local/bin/impacket-secretsdump
+# impacket's console scripts are named after the example files (`secretsdump.py`),
+# not with an `impacket-` prefix. Check the name that actually gets installed.
+test -x /usr/local/bin/secretsdump.py
 "$IMPACKET_VENV/bin/python3" -c 'import impacket; print(impacket.__version__)'

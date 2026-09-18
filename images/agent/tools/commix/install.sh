@@ -23,4 +23,5 @@ rm -f /tmp/commix.tar.gz
 # surface only when the tool is first run against a target.
 python3 -c "import ast; ast.parse(open('/opt/commix/commix.py').read())"
 
+# `--version` prints and exits without needing a target. Verified against 4.1.
 commix --version

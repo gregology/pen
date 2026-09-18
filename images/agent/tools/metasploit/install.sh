@@ -8,8 +8,14 @@ set -eux -o pipefail
 # legacy label, not a distro requirement. The pin keeps an unrelated
 # metasploit* package from ever winning a version comparison.
 apt_install curl gnupg
+# --batch and an explicit GNUPGHOME: without them gpg tries to open /dev/tty
+# for pinentry, which does not exist during a build, and the import fails with
+# "gpg: cannot open '/dev/tty'" while curl reports a truncated write.
+export GNUPGHOME=/tmp/gnupg
+mkdir -p "$GNUPGHOME"
+chmod 700 "$GNUPGHOME"
 curl -fsSL https://apt.metasploit.com/metasploit-framework.gpg.key \
-    | gpg --dearmor -o /usr/share/keyrings/metasploit-framework.gpg
+    | gpg --batch --yes --dearmor -o /usr/share/keyrings/metasploit-framework.gpg
 echo "deb [signed-by=/usr/share/keyrings/metasploit-framework.gpg] https://apt.metasploit.com/ lucid main" \
     > /etc/apt/sources.list.d/metasploit-framework.list
 printf 'Package: metasploit*\nPin: origin apt.metasploit.com\nPin-Priority: 1000\n' \

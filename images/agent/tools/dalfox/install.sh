@@ -16,4 +16,7 @@ apt-get install -y --no-install-recommends /tmp/dalfox.deb
 rm -f /tmp/dalfox.deb
 rm -rf /var/lib/apt/lists/*
 
-dalfox version
+# `dalfox version` is NOT a version command: dalfox parses the bare word as a
+# target URL, attempts to scan http://version/, fails DNS, and exits 2. The
+# flag form is the one that prints and exits cleanly.
+dalfox --version

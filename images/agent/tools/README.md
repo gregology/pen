@@ -270,9 +270,17 @@ docker run --rm pen/agent:test bash -lc \
 # Expected: ModuleNotFoundError — import it from /opt/venvs/impacket/bin/python3.
 ```
 
-Step 4's `find` is the check that `COPY --exclude` did what it claims. It fails
-loudly if the frontend is too old to support the flag, but verify the result
-rather than assuming.
+Step 4's `find` is the check that `COPY --exclude` did what it claims, and it is
+not optional. The flag fails in two different ways and only one is loud:
+
+- If BuildKit cannot resolve the pinned frontend, the build errors.
+- **If the pattern does not match anything, the COPY succeeds and ships every
+  installer into the runtime image with no warning.** Verified on host01: a
+  bare `--exclude=install.sh` removed none of the 32 installers, and
+  `--exclude=**/install.sh` removed all 32. The pattern must be recursive.
+
+Run the `find` after any change to that COPY line, and compare the count of
+`AGENTS.md` files (32) against the tool directory count.
 
 ## Conventions these docs follow
 

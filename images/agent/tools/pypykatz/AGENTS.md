@@ -141,8 +141,18 @@ impacket `-hashes`) is generated from the JSON or the grep rows with `jq`/`awk`.
 - **The `smb` command group can vanish.** `__main__.py` imports the SMB helper
   inside a `try/except` and prints the exception; if `aiosmb` or its
   dependencies are broken in the venv, `pypykatz smb …` is simply absent and
-  startup shows an error string. Check with `pypykatz smb client help` before
-  relying on it.
+  startup shows an error string. `install.sh` imports
+  `pypykatz.commands.smb` directly to prove the group loads.
+- **`pypykatz smb client help` crashes on Python 3.11.** The command group loads
+  but its argument handling does not: it raises
+  `AttributeError: 'SMBCMDArgs' object has no attribute 'decode'` from
+  `urllib.parse`, which expects bytes or str where pypykatz passes its own
+  argument object. Found during the image build, where it failed the build for a
+  defect in the tool rather than in the install script. Treat `pypykatz smb
+  client` as unusable until upstream ships a fix, and use `impacket
+  smbclient.py` or netexec for SMB work instead. The other `smb` subcommands
+  (`lsassdump`, `secretsdump`, `dcsync`) are not affected by this particular
+  traceback and have not been exercised here.
 - **`-o` overwrites the target file** with no warning; it does not append.
 - **Parsing failures are logged, not fatal.** Structures that do not match the
   expected build are skipped; run with `-v` (repeatable) to see why a session is
