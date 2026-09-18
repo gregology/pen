@@ -160,22 +160,24 @@ COPY tools/words/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 # ------------------------------------------------------------------
-# Operator documentation, read-only in the runtime image.
+# Operator documentation, baked into the runtime image.
 #
-# The install scripts are excluded: they are build instructions, and the agent
-# has no use for a script that would reinstall a pinned tool over the pinned
-# version. Everything else in tools/ lands at /tools/, mirroring the layout in
-# this repository so the relative links between documents keep working.
+# The build instructions are excluded — the install scripts and the template
+# they are copied from. They are not documentation, and the agent has no use for
+# a script that would reinstall a pinned tool over the pinned version.
+# Everything else in tools/ lands at /tools/, mirroring the layout in this
+# repository so the relative links between documents keep working.
 #
-# The pattern must be recursive. A bare `--exclude=install.sh` is accepted and
-# silently matches nothing here, which ships every installer into the runtime
-# image with no warning — verified on host01, where `**/install.sh` removed all
-# 32 and the bare form removed none.
+# The pattern must be recursive, and the trailing `*` is what covers both
+# `install.sh` and `install.sh.template`. A bare `--exclude=install.sh` is
+# accepted and silently matches nothing here, which ships every installer into
+# the runtime image with no warning — verified on host01, where `**/install.sh`
+# removed all 32 and the bare form removed none.
 #
 # This copy sits after every tool layer on purpose. A documentation edit
 # changes this layer and nothing else.
 # ------------------------------------------------------------------
-COPY --exclude=**/install.sh tools/ /tools/
+COPY --exclude=**/install.sh* tools/ /tools/
 
 # ------------------------------------------------------------------
 # Agent runtime

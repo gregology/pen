@@ -5,9 +5,13 @@ tool. A tool's directory owns **everything about that tool**: the pinned
 version, the install steps, and the operator documentation. Nothing about a
 tool lives anywhere else in the repository.
 
-This directory is copied into the agent container at `/tools/` (read-only), so
-the agent can read its own tool documentation. The `install.sh` files are
-excluded from that copy — see *Layout* below.
+This directory is baked into the agent image at `/tools/`, so the agent reads its
+own tool documentation from the image rather than from a mount. The build
+instructions are excluded from that copy — see *Layout* below.
+
+This file describes the repository. Only the documentation reaches the
+container, so the commands under *Verifying a change* run from a checkout of this
+repository, not from inside the agent.
 
 - Choosing a tool, or asking why one is not here: [`TOOL_RESEARCHING.md`](TOOL_RESEARCHING.md)
 - How to add one: this document.
@@ -28,17 +32,18 @@ tools/
 ```
 
 `_lib/install.sh.template` is a template, not a tool: it has no `install.sh`
-of its own and is never run.
+of its own and is never run. Like the installers, it does not reach the container.
 
 ## In the container
 
 | Path | Contents |
 |---|---|
-| `/tools/<name>/AGENTS.md` | Operator documentation (everything except `install.sh`) |
-| `/opt/py` | General-purpose Python environment; `python3` resolves here |
+| `/tools/<name>/AGENTS.md` | Operator documentation (everything except the installers and the template) |
+| `/opt/py` | General-purpose Python environment; `python3` resolves here. It carries no tool library — use `/opt/venvs/<name>/bin/python3` for that |
 | `/opt/venvs/<name>` | A Python tool's own virtualenv |
-| `/usr/local/bin` | Every tool's console script, symlinked to its venv |
-| `/opt/wordlists/current` | SecLists, symlinked to the pinned tag |
+| `/usr/local/bin` | Tools installed from upstream releases (`dnsx`, `feroxbuster`, `ffuf`, `httpx`, `katana`, `naabu`, `nuclei`, `subfinder`, `trufflehog`) plus a symlink per venv console script |
+| `/usr/bin`, `/usr/sbin` | Tools installed as Debian packages (`gobuster`, `hashcat`, `john`, `nmap`, `sqlmap`, `trivy`, `whatweb`, …) |
+| `/opt/wordlists/current` | SecLists, a symlink to `/opt/wordlists/SecLists` |
 
 ## Adding a tool
 
@@ -53,7 +58,7 @@ of its own and is never run.
 
    ```bash
    mkdir tools/<name>
-   cp _lib/install.sh.template tools/<name>/install.sh
+   cp tools/_lib/install.sh.template tools/<name>/install.sh
    $EDITOR tools/<name>/install.sh
    ```
 
@@ -167,18 +172,6 @@ expose_venv "$HTTPX_VENV" httpx     # ProjectDiscovery's binary owns `httpx`
 intended owner of a binary name is always declared explicitly, never decided by
 install order.
 
-**When a tool has no console script** (a library, or a tool you invoke as a
-module), expose its interpreter with a shim rather than putting the venv on
-PATH:
-
-```bash
-cat > /usr/local/bin/scapy <<'EOF'
-#!/bin/sh
-exec /opt/venvs/scapy/bin/python3 "$@"
-EOF
-chmod +x /usr/local/bin/scapy
-```
-
 ### 4. Source tree, script, or data
 
 For a tool that is a plain tree run from its own directory (`testssl.sh`,
@@ -210,9 +203,19 @@ image ships 3.5.0, which predates the 3.7 CLI rework, so half the flags in the
 current README do not exist. Documenting those would have produced commands
 that error at engagement time.
 
-Required sections, in this order: what it is and when to reach for it versus
-its neighbours; installation and location; the flags that matter; worked
-examples; output formats and how to parse them; failure modes; safety notes.
+Required content, in this order. The headings below are the convention in this
+directory; a document that predates them may use the equivalent name in brackets.
+
+1. Opening paragraph — what it is, and when to reach for it versus its neighbours.
+2. `Installation and location` [Install and location] — version, paths,
+   interpreter, dependencies.
+3. `Rules that apply to this tool` — the constraints an operator has to hold.
+4. `Command reference` [Flags that matter, Flag reference] — the flags that matter.
+5. `Typical workflows` [Examples] — worked examples.
+6. `Output and parsing` [Output formats] — formats and how to parse them.
+7. `Chaining with the rest of the toolchain` — where it sits in a pipeline.
+8. `Limits, failure modes and gotchas` [Failure modes, Notes].
+9. `Safety and scope` [Safety] — the closing safety note.
 
 Rules that have earned their place:
 
@@ -223,10 +226,13 @@ Rules that have earned their place:
   release the flags describe.
 - **Say what a silent failure looks like.** The valuable entries are the ones
   that describe a tool returning nothing, exiting 0, or reporting success
-  while doing nothing — `katana -hl` exiting 0 with "0 endpoints found"
-  because the browser never launched, `ffuf` returning no matches because its
-  default `-mc` excludes 404, `masscan` returning nothing because it selected
-  the interface the kill switch drops.
+  while doing nothing — `commix --url=… --batch` exiting 0 without testing
+  anything because it read stdin instead, `ffuf` returning no matches because
+  its default `-mc` excludes 404, `masscan` returning nothing because it
+  selected the interface the kill switch drops.
+- **Re-verify a claim before repeating it.** Tool behaviour changes with the
+  pinned version, and a stale gotcha is as expensive as a wrong flag: the
+  `conf.L3socket` workaround scapy needed years ago does nothing on 2.7.0.
 - **Name the specific failure over the general one.** "TLS verification is
   disabled, so a certificate problem is never reported" beats "use with care".
 - **Wordlist paths must exist.** SecLists is pinned at
@@ -261,13 +267,22 @@ docker run --rm pen/agent:test bash -lc '
   for c in nmap nuclei ffuf gobuster httpx nxc arjun wafw00f pypykatz; do
     printf "%-12s %s\n" "$c" "$(command -v "$c" || echo MISSING)"
   done
-  find /tools -name install.sh'
+  find /tools -name 'install.sh*'
 # Expected: a path for every tool, and no output from find.
 
 # 5. Python isolation held: the base interpreter cannot see a tool's library.
 docker run --rm pen/agent:test bash -lc \
   'python3 -c "import impacket" 2>&1 | tail -1'
 # Expected: ModuleNotFoundError — import it from /opt/venvs/impacket/bin/python3.
+
+# 6. The documentation still describes the image you just built. Any version
+#    bump invalidates that tool's flags, defaults, paths and counts.
+docker run --rm pen/agent:test bash -lc '
+  for c in nmap masscan nuclei ffuf katana hashcat scapy testssl.sh; do
+    printf "%-12s %s\n" "$c" "$("$c" --version 2>&1 | head -1)"
+  done'
+# Compare against each AGENTS.md "Version" row, then re-run that tool's worked
+# examples before trusting them.
 ```
 
 Step 4's `find` is the check that `COPY --exclude` did what it claims, and it is
@@ -277,7 +292,8 @@ not optional. The flag fails in two different ways and only one is loud:
 - **If the pattern does not match anything, the COPY succeeds and ships every
   installer into the runtime image with no warning.** Verified on host01: a
   bare `--exclude=install.sh` removed none of the 32 installers, and
-  `--exclude=**/install.sh` removed all 32. The pattern must be recursive.
+  `--exclude=**/install.sh` removed all 32. The pattern must be recursive; the
+  trailing `*` in the COPY is what covers `install.sh.template` too.
 
 Run the `find` after any change to that COPY line, and compare the count of
 `AGENTS.md` files (32) against the tool directory count.
@@ -287,6 +303,13 @@ Run the `find` after any change to that COPY line, and compare the count of
 - Tools are referred to by the command you type, not the project name.
 - Commands are complete enough to run: absolute paths for wordlists, `$WORK`
   for outputs, `$TARGET` for the target.
+- **Loopback fixtures use port 8090** (`python3 -m http.server 8090`). Port 8080
+  in the agent container is the VPN gateway's control API: it is already bound
+  and answers 401, so an example pointed at it tests the wrong service. A port
+  that appears inside a scan's target list is a different thing and stays.
+- **A Python one-liner that imports a tool's library names that tool's
+  interpreter** — `/opt/venvs/<name>/bin/python3`. Bare `python3` is `/opt/py`
+  and has no tool libraries.
 - Where a flag differs between the installed version and current upstream, the
   installed version wins and the discrepancy is called out.
 - `EXAMPLES.md` exists only where a multi-step workflow earns the extra file.

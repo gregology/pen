@@ -61,15 +61,24 @@ no flag list, because it produces commands that error at engagement time.
 The invocation shape, which is stable across releases:
 
 ```bash
-commix --url="https://target.example/item?id=1" --batch
+commix --url="https://target.example/item?id=1" --batch --ignore-stdin
 ```
+
+`--ignore-stdin` is required in the agent's shell, which is not a TTY: without
+it commix prints `[info] Using 'stdin' for parsing targets list.` and exits 0
+without testing `--url`. It is `help=SUPPRESS` upstream in 4.1, so `-h` does not
+list it.
 
 ## Failure modes
 
-- **A wrong flag is rejected loudly.** The real tool exits non-zero on an
-  unrecognised option, unlike the stub it replaced, which printed
-  `Error: Type '-h' for Help !` and exited **0** — the failure mode that made a
-  broken install look like a clean scan.
+- **Exit status proves nothing.** An unrecognised option prints an error and
+  still exits **0**: `commix --os-shell` and `commix --definitely-not-a-flag`
+  both do this, as did the stub the real tool replaced (`Error: Type '-h' for
+  Help !`, exit **0**). Read the output; do not branch on `$?`.
+- **A non-TTY run without `--ignore-stdin` tests nothing.** commix prints
+  `[info] Using 'stdin' for parsing targets list.` and exits 0 without touching
+  `--url`, so the run looks successful and has tested nothing. Pass
+  `--ignore-stdin` in every agent-shell invocation.
 - **Detection is heuristic and confirmation-heavy.** A reported injection point
   should be reproduced by hand (a `sleep` delay, a reflected marker) before it
   enters a findings note.
@@ -97,7 +106,8 @@ Never run without explicit human confirmation per target:
 
 - any target not confirmed for destructive testing — injected commands execute
   on the target host, and "read-only payload" is a convention, not a guarantee;
-- `--os-shell`, reverse-shell or callback payloads, which establish access
-  rather than demonstrating a bug;
+- `--os-cmd` (pseudo-terminal on the target) or `--alter-shell` (forces the
+  shell used for injection), reverse-shell or callback payloads, which
+  establish access rather than demonstrating a bug;
 - authenticated testing, which acts as that user and can write state;
 - raising concurrency or removing delays on a service that serves real users.

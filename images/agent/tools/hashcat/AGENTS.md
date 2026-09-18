@@ -52,7 +52,8 @@ wc -l /tmp/wl/rockyou.txt      # 14344391
    ceiling.** Mask and rule campaigns need the same authorization discipline as
    an online attack: state the keyspace, the speed from the table below and the
    wall-clock cost, and get confirmation before starting. Compute the keyspace
-   (`hashcat -a 3 --keyspace`) and divide by the benchmark speed before
+   from the mask's charset sizes (multiply them — `hashcat -a 3 --keyspace`
+   under-reports it, see workflow 4) and divide by the benchmark speed before
    committing to a run.
 5. **Always pass `</dev/null` when running from a script or a pipe.** hashcat
    reads stdin for its interactive `[s]tatus [p]ause …` controls and will eat
@@ -140,11 +141,14 @@ skips what is already cracked.
 
 ```bash
 hashcat -a 3 -m 1000 hashes.txt '?u?l?l?l?l?d?d' --increment --increment-min 6 </dev/null
-hashcat -a 3 -m 1000 --keyspace '?u?l?l?l?l?d?d'      # 456976000 before increment
+hashcat -a 3 -m 1000 --keyspace '?u?l?l?l?l?d?d'      # prints 67600 — not this mask's keyspace
 ```
 
-Check `--keyspace` and the speed table first: an eight-character full-charset
-NTLM mask is ~123 days at this image's 623 MH/s.
+That printed figure is not the size of this attack. The mask is 26^5 × 100 =
+1 188 137 600 candidates, 17 576 times the 67 600 that `--keyspace` reports, so
+size mask campaigns from the charset arithmetic rather than from `--keyspace`.
+Against the speed table the full mask is seconds of NTLM work; an eight-character
+full-charset mask (95^8) is ~123 days at this image's 623 MH/s.
 
 ### 5. Long job with a session and restore
 
@@ -245,9 +249,9 @@ WPA, ~2.6 h for sha512crypt and ~14 h for bcrypt; scrypt is ~41 days. With
 `rules/best64.rule: No such file or directory`. hashcat does not chdir to
 `/usr/share/hashcat`. Always use `/usr/share/hashcat/rules/<name>.rule`.
 
-**`--identify` is not a decision.** A 32-hex MD5 hash matched 7 modes
-(3500, 4400, 20900, 4300, 1000, 9900, 8600) — it only works for
-structurally unique formats (it does correctly return 13100 for a
+**`--identify` is not a decision.** A 32-hex MD5 hash matched 11 modes
+(3500, 4400, 20900, 4300, 1000, 9900, 8600, 900, 0, 70, 2600) — it only works
+for structurally unique formats (it does correctly return 13100 for a
 `$krb5tgs$23$` blob). Set `-m` explicitly from the source of the hash.
 
 **Silent stdin consumption.** hashcat's status keys are read from stdin. Under

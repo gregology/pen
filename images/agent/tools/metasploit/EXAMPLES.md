@@ -372,7 +372,7 @@ f9a907d742899c1bd0567c362babd2515ea16a9c531786585513deddd49224da  win-enc.exe
 ```
 
 The verification that actually matters for an encoder is the byte count of the
-forbidden characters. `xxd` and `hexdump` are **not** installed; `od` is:
+forbidden characters. `xxd` is **not** installed; `od` and `hexdump` are:
 
 ```bash
 count_bad() { od -An -v -tx1 "$1" | tr -s ' ' '\n' | grep -cE '^(00|0a)$'; }

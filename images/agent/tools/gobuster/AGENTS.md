@@ -13,7 +13,7 @@ work, and `arjun` when the question is parameter *names* rather than paths.
 | | |
 |---|---|
 | Version | **3.5.0-1+b1** (Debian bookworm) — this predates the upstream 3.7 CLI rework |
-| Binary | `/usr/bin/gobuster`, man page `gobuster(1)` |
+| Binary | `/usr/bin/gobuster` — no man page in this image (no `gobuster(1)`, and no `man` binary); `gobuster <mode> --help` is the local reference |
 | Wordlists | `/opt/wordlists/current` (SecLists) |
 
 **The flags below are the v3.5.0 set.** Newer upstream releases renamed and added
@@ -32,7 +32,7 @@ Global (every mode):
 | `--delay D` | Wait between requests per thread, as a Go duration (`--delay 1500ms`, `--delay 2s`), default 0. |
 | `-o FILE` | Write results to a file (results only; progress and errors stay on the terminal). |
 | `-q` | No banner, no progress. |
-| `-z`, `--no-progress` | Suppress the progress line only (progress goes to stderr). |
+| `-z`, `--no-progress` | Suppress the progress line only (progress goes to stderr on a TTY). |
 | `-v`, `--verbose` | Verbose output: also print `Missed:` lines and errors. |
 | `--no-error` | Suppress errors. |
 | `-p FILE` | Pattern file: each line is applied to every word, `{GOBUSTER}` is replaced by the word. |
@@ -86,8 +86,9 @@ gobuster dir -u https://target.example -w /opt/wordlists/current/Discovery/Web-C
   -t 10 --delay 100ms -o $WORK/gobuster-dir.txt
 ```
 
-Progress prints on stderr; hits print to stdout as
+On a TTY, progress prints on stderr and hits print to stdout as
 `/admin                (Status: 301) [Size: 0] [--> https://target.example/admin/]`.
+In a pipe, stderr is empty and the banner plus results go to stdout.
 `common.txt` is small (~4.6k words) — the right first pass. If the server answers
 everything with 200, gobuster aborts with `the server returns a status code that
 matches the provided options for non existing urls`; re-run with
@@ -182,8 +183,9 @@ structured results.
   asked for are printed; `-s 200` hides the `403` that is your actual finding.
   Default `-b 404` with no `-s` prints everything else, which is the safer
   default.
-- **Progress on stderr, results on stdout.** `-q` removes the banner and
-  progress but not errors.
+- **Progress is TTY-only; results are not.** On a TTY progress goes to stderr
+  and results to stdout; in a pipe stderr is empty and the banner plus results
+  go to stdout. `-q` removes the banner and progress but not errors.
 - **No TLS verification by default is a choice you have to make** — a `-k`-less
   run against a self-signed target fails handshakes per thread, which looks like
   "nothing found". Use `-k` for lab targets and record it.
@@ -198,7 +200,8 @@ structured results.
 - **Wordlist choice is the whole game.** `Discovery/Web-Content/common.txt`
   (first pass), `raft-small-words.txt`, `raft-medium-directories.txt` /
   `raft-large-directories.txt`, `raft-medium-files.txt`,
-  `raft-medium-extensions.txt` + `-X`, `api/api-endpoints.txt`,
+  `raft-medium-extensions.txt` + `-X`,
+  `Discovery/Web-Content/api/api-endpoints.txt`,
   `Discovery/DNS/subdomains-top1million-5000.txt` (vhost/dns) — all under
   `/opt/wordlists/current`. Upstream docs still cite
   `directory-list-2.3-medium.txt`; in SecLists 2026.1 that file is named

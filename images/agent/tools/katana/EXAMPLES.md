@@ -56,7 +56,7 @@ katana -u http://127.0.0.1:8099 -d 2 -jc -jsl -silent -duc
 Adds:
 
 ```
-http://127.0.0.1:8099/api/v1/items
+http://127.0.0.1:8099/api/v1/items?debug=1
 ```
 
 `-jc` alone parses endpoints out of JavaScript; `-jsl` adds jsluice parsing,
@@ -68,7 +68,7 @@ which its own help text calls memory intensive. Start with `-jc`.
 printf '<html><head><title>Form</title></head><body><form action="/submit" method="POST"><input name="user"><input name="pass" type="password"><textarea name="c"></textarea><select name="s"><option>1</option></select></form></body></html>' > /tmp/site/form.html
 
 katana -u http://127.0.0.1:8099/form.html -d 1 -silent -jsonl -fx -duc \
-  | jq -c '.forms[]?'
+  | jq -c '.response.forms[]?'
 ```
 
 Real output:
@@ -156,13 +156,13 @@ jq -r '.request.endpoint' "$WORK/katana.jsonl" | grep -E '\?' | sort -u > "$WORK
 wc -l "$WORK/params.txt"
 ```
 
-## Known-broken in this image: headless crawling
+## Headless crawling: what it actually needs
 
-`-hl` and `-hh` download a Chromium build on first use and then cannot run it.
-The failure is silent, which is the dangerous part:
+`-hl` and `-hh` download a Chromium build via go-rod on first use, then launch
+and run it:
 
 ```bash
-$ katana -u http://127.0.0.1:8099 -d 1 -hl -duc
+$ katana -u http://127.0.0.1:8099 -d 1 -hl -duc -ct 25s
 [launcher.Browser] Download: https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
 [launcher.Browser] Downloaded: /root/.cache/rod/browser/chromium-1321438
 [INF] Crawl completed in 1s. 0 endpoints found.
@@ -170,16 +170,9 @@ $ echo $?
 0
 ```
 
-Exit code 0, zero endpoints, no error. The bundled browser is missing 14 shared
-libraries:
+The download is roughly 150 MB from `storage.googleapis.com`, so headless needs
+egress on first use; the browser is then cached, so later runs reuse it.
 
-```bash
-$ ldd /root/.cache/rod/browser/chromium-1321438/chrome | grep -c 'not found'
-14
-$ /root/.cache/rod/browser/chromium-1321438/chrome --version
-... error while loading shared libraries: libnss3.so: cannot open shared object file
-```
-
-A headless crawl that finds nothing has learned nothing about the target — it
-never had a browser. Use `-jc` (non-headless JavaScript parsing), which needs no
-browser and works.
+`-hl` is labelled experimental upstream. A headless crawl that exits 0 with
+`0 endpoints found` is not evidence that the target has no URLs — use `-jc`
+(non-headless JavaScript parsing), which needs no browser, as the baseline.

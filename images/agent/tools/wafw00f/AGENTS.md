@@ -14,7 +14,7 @@ whatweb answers "what is the stack".
 | Version | 2.4.2 (PyPI release 2026-01-26, requires Python ≥3.10; pinned in `install.sh`) |
 | Entry point | `/usr/local/bin/wafw00f` → `/opt/venvs/wafw00f/bin/wafw00f` |
 | Venv | `/opt/venvs/wafw00f` |
-| Signatures | bundled; `wafw00f -l` prints the exact names this build can match (192 in 2.4.2) |
+| Signatures | bundled; `wafw00f -l` prints the exact names this build can match (about 172–173 entries) |
 
 ## Flags that matter
 

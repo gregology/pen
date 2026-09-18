@@ -13,14 +13,17 @@ runtime.
 |---|---|
 | Version | 0.74.0 (`trivy --version`) |
 | Binary | `/usr/bin/trivy` (upstream `.deb`, 168 MB) |
-| Cache | `/root/.cache/trivy` — `db/` (1.4 GB), `java-db/` (~267 MB, on demand), `policy/` (3.1 MB checks bundle), `fanal/` (image/layer cache) |
+| Cache | `/root/.cache/trivy` — `db/` (1.4 GB), `java-db/` (~267 MB, on demand), `policy/` (3.1 MB checks bundle), `fanal/` (image/layer cache); not pre-seeded, created by the first DB download |
 | Config | `trivy.yaml` in the working directory, or `-c FILE`; `--generate-default-config` writes a template |
 | Env | `TRIVY_*` variables mirror every flag (`TRIVY_SKIP_DB_UPDATE=true`, `TRIVY_CACHE_DIR`, `TRIVY_SEVERITY`, …) |
-| DB metadata | `/root/.cache/trivy/db/metadata.json` — `Version`, `UpdatedAt`, `NextUpdate`, `DownloadedAt` |
+| DB metadata | `/root/.cache/trivy/db/metadata.json` — `Version`, `UpdatedAt`, `NextUpdate`, `DownloadedAt`; exists only after the first DB download |
 
-Two data sets are fetched from the network on first use: the vulnerability DB
-(`mirror.gcr.io/aquasec/trivy-db:2`, falling back to `ghcr.io/aquasecurity/trivy-db:2`)
-and the misconfiguration checks bundle (`mirror.gcr.io/aquasec/trivy-checks:2`).
+The cache is **not** baked into the image: at first use `/root/.cache/trivy` does
+not exist, so neither `db/` nor `db/metadata.json` is present until a DB-backed
+scan runs. Two data sets are fetched from the network on first use: the
+vulnerability DB (`mirror.gcr.io/aquasec/trivy-db:2`, falling back to
+`ghcr.io/aquasecurity/trivy-db:2`) and the misconfiguration checks bundle
+(`mirror.gcr.io/aquasec/trivy-checks:2`).
 The DB download is 113.92 MiB compressed and expands to 1.4 GB on disk; it is
 re-fetched when `NextUpdate` passes. The Java index DB is pulled only when a Java
 artefact is scanned.
@@ -92,8 +95,8 @@ Flags that matter
 | `--input FILE` | Scan an image tar instead of a tag |
 | `--platform`, `--parallel` (5), `--timeout` (5m), `-q`, `-d` | Scope, workers, timeout, quiet, debug |
 
-`--security-checks` still parses but warns `'--security-checks' is deprecated. Use
-'--scanners' instead.` Use `--scanners`.
+`--security-checks` still parses but produces no warning in 0.74.0; it is
+deprecated in favour of `--scanners`. Use `--scanners`.
 
 ## Typical workflows
 

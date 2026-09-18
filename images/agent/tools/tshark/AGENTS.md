@@ -22,7 +22,7 @@ there is no `wireshark` group. Capture works because the agent is root; do not
 drop privileges for capture. `dumpcap` prints `cap_set_proc() fail return:
 Operation not permitted` twice on startup here — the container lacks
 `CAP_SETPCAP`, and the warning is benign as root. `tshark --version` and every
-capture likewise print `Running as user "root" and group "root". This could be
+capture likewise print `Running as user "root" and group "node". This could be
 dangerous.` to stderr.
 
 ## Rules that apply to this tool
@@ -59,7 +59,7 @@ Capture
 |---|---|
 | `-i lo` / `-i eth0` / `-i any` | Interface; `any` uses Linux cooked capture and works here |
 | `-D` | List interfaces — see the gotcha below: this lists only extcap plugins, use `dumpcap -D` |
-| `-f 'tcp port 8080'` | **Capture** filter, BPF syntax, applied in the kernel |
+| `-f 'tcp port 8090'` | **Capture** filter, BPF syntax, applied in the kernel |
 | `-c 50` | Stop after N packets |
 | `-a duration:30` / `-a filesize:10240` / `-a packets:1000` | Autostop condition |
 | `-b filesize:8192 -b files:5` | Ring buffer, KB per file, keep 5 files |
@@ -92,9 +92,9 @@ Read and dissect
 
    ```bash
    mkdir -p "$WORK/pcap"
-   (cd /tmp && nohup python3 -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &)
-   ( for i in 1 2 3; do curl -s -o /dev/null http://127.0.0.1:8080/; done ) &
-   tshark -i lo -f 'tcp port 8080' -a duration:5 -w "$WORK/pcap/local-http.pcap"
+   (cd /tmp && nohup python3 -m http.server 8090 --bind 127.0.0.1 >/dev/null 2>&1 &)
+   ( for i in 1 2 3; do curl -s -o /dev/null http://127.0.0.1:8090/; done ) &
+   tshark -i lo -f 'tcp port 8090' -a duration:5 -w "$WORK/pcap/local-http.pcap"
    ```
 
 2. **Capture a single authorized external TLS session and read the SNI.**
@@ -176,9 +176,10 @@ tshark -r cap.pcap -Y 'tls.handshake.type==1' -T json \
 
 **Exit codes.** `0` for a successful read even when the filter matches nothing;
 `2` for a missing file or an invalid display filter; `2` for a binary file that
-is not a capture. Exit `0` is not proof of a clean capture — a text file handed
-to `-r` is dissected as a `MIME_FILE/XML` packet and still exits 0. Check the
-packet count (`capinfos -c`) or the dissected protocol before trusting a read.
+is not a capture. Exit `0` is not proof of a clean capture — an XML file handed
+to `-r` is dissected as a `MIME_FILE/XML` packet and still exits 0, while a
+plain text file exits 2. Check the packet count (`capinfos -c`) or the dissected
+protocol before trusting a read.
 
 `capinfos -c -u -a -e -T file.pcap` summarises a capture in tab-separated form
 (packet count, duration, start, end).
@@ -194,9 +195,9 @@ tshark -r "$WORK/pcap/tls.pcap" -Y 'tls.handshake.type==1' -T json \
 
 ```bash
 # scapy-generated pcap -> tshark dissection
-python3 -c "
+/opt/venvs/scapy/bin/python3 -c "
 from scapy.all import *
-wrpcap('/tmp/probe.pcap', [IP(dst='127.0.0.1')/TCP(dport=8080, flags='S')])"
+wrpcap('/tmp/probe.pcap', [IP(dst='127.0.0.1')/TCP(dport=8090, flags='S')])"
 tshark -r /tmp/probe.pcap -T fields -e ip.dst -e tcp.dstport -e tcp.flags.syn
 ```
 
@@ -225,19 +226,20 @@ can be scanned with `trivy` or `trufflehog`.
   display filters (`http.request`, `tls.handshake.type==1`, `ip.addr==10.0.0.5`)
   and only applies to dissection. Wrong-way usage fails loudly:
   `-r file -f 'http.request'` → `Only read filters, not capture filters, can be
-  specified when reading a capture file.`; `-Y 'tcp port 8080'` while capturing →
-  `"port" was unexpected in this context.`
+  specified when reading a capture file.`; `-Y 'tcp port 8080'` while capturing
+  fails with a display-filter parse error.
 - **`tshark -D` is misleading here.** It lists only extcap pseudo-interfaces
   (`ciscodump`, `dpauxmon`, `randpkt`, `sdjournal`, `sshdump`, `udpdump`,
-  `wifidump`). Real interfaces come from `dumpcap -D` — here `eth0`, `any`, `lo`,
-  `bluetooth-monitor`, `nflog`, `nfqueue`. `ip -o addr` is the fastest check of
-  which one carries egress.
+  `wifidump`). Real interfaces come from `dumpcap -D` — here `eth0`, `eth1`,
+  `wg0`, `any`, `lo`, `dbus-system`, `dbus-session`, `bluetooth-monitor`,
+  `nflog`, `nfqueue`. `ip -o addr` is the fastest check of which one carries
+  egress.
 - **An empty result is not an error.** A display filter that matches nothing, or
   a capture filter that never fired, produces zero lines and exit code 0. Always
   compare against `capinfos -c` before concluding "no traffic".
-- **`-r` on a non-capture file can succeed misleadingly.** A text/XML file is
-  dissected as `MIME_FILE/XML` and exits 0; a binary flow file exits 2. Verify the
-  dissected protocol, not just the exit code.
+- **`-r` on a non-capture file can succeed misleadingly.** An XML file is
+  dissected as `MIME_FILE/XML` and exits 0; a plain text file and a binary flow
+  file exit 2. Verify the dissected protocol, not just the exit code.
 - **Non-standard ports usually still decode.** Wireshark applies HTTP heuristics,
   so `-Y http.request` matched traffic on 8080, 18080 and 12345 without help. When
   it does not, force it with `-d tcp.port==<port>,http` (verified working) rather

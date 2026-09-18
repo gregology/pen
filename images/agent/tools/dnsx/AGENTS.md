@@ -12,13 +12,15 @@ live-host list, and the tool that keeps an enumerated list honest.
 |---|---|
 | Version | `1.3.1` (upstream release, sha256-verified at image build) |
 | Binary | `/usr/local/bin/dnsx` |
-| Config | none created by default; resolvers come from `-r` or the system |
+| Config | none created by default; resolvers come from `-r` or dnsx's built-in list |
 | Output | stdout, or `-o <file>` |
 
 dnsx keeps no cache and no state between runs. `-resume` writes a resume file
-in the working directory. It resolves through whatever `/etc/resolv.conf`
-points at unless `-r` supplies a resolver list, which matters because the
-container's resolver is the Docker/host resolver, not a public one.
+in the working directory. It resolves through its own built-in list of public
+resolvers unless `-r` supplies a resolver list; it does not use
+`/etc/resolv.conf`, which in this image points at `nameserver 127.0.0.11` while
+`dnsx -a -json` reports `"resolver":["1.0.0.1:53"]`. Pass `-r` to pin a resolver
+explicitly.
 
 ```bash
 dnsx -version -duc     # "Current Version: 1.3.1"
@@ -307,9 +309,9 @@ subfinder -d "$DOMAIN" -silent -rl 5 -duc \
   display flag prints only the hostname; `-resp` adds the record type and value;
   `-resp-only` prints only the value. Picking the wrong one silently changes the
   output shape a pipeline consumes.
-- **`/etc/hosts` is ignored unless `-hf` is passed.** `echo localhost | dnsx -a`
-  returns nothing; the same command with `-hf` returns `localhost [A] [127.0.0.1]`.
-  dnsx asks DNS, not the resolver library.
+- **`/etc/hosts` is not read unless `-hf` is passed.** `echo localhost | dnsx -a
+  -resp -silent` still prints `localhost [A] [127.0.0.1]`; that answer comes from
+  DNS. dnsx asks DNS, not the resolver library.
 - **Rate limiting is off by default.** `-rl` defaults to `-1`, meaning
   unlimited, with 100 threads. Against a target's nameserver that is a
   denial-of-service shape. Always set `-rl` explicitly on an engagement.
@@ -328,19 +330,20 @@ subfinder -d "$DOMAIN" -silent -rl 5 -duc \
   traffic pattern from a recursive lookup and is visible to the zone's own
   infrastructure. Without `-resp` it prints only the name, which makes a
   successful trace look like a failed one.
-- **The container's resolver is the Docker/host resolver.** Without `-r`, dnsx
-  uses `/etc/resolv.conf`; in this image that is `172.64.36.1` — a
-  Tailscale-provided resolver, not a public one. Pass `-r` with a known resolver
-  list when the resolver identity matters for reproducibility, and note that
-  DNS still has to leave through the tunnel.
+- **dnsx does not use `/etc/resolv.conf`.** Without `-r` it queries its own
+  built-in public resolver list; in this image `/etc/resolv.conf` points at
+  `nameserver 127.0.0.11`, yet `dnsx -a -json` reports
+  `"resolver":["1.0.0.1:53"]`. Pass `-r` with a known resolver list when the
+  resolver identity matters for reproducibility, and note that DNS still has to
+  leave through the tunnel.
 - **`-resp-only` discards the name.** It is convenient for `naabu`, but it
   makes the result set impossible to attribute afterwards. Prefer `-a -resp`
   and reduce with `jq` when the name matters.
 - **A failed lookup and a filtered lookup look the same in plain output.** Both
   print nothing. Use `-json` and check `.status_code`, or count with `-stats`.
 - **Reverse lookups are not a way to enumerate.** `echo 127.0.0.1 | dnsx -ptr`
-  returns nothing, and most addresses in a range have no PTR record. Empty PTR
-  output is the normal case, not a bug.
+  prints `127.0.0.1 [PTR] [localhost]`, but most addresses in a range have no
+  PTR record. Empty PTR output is the normal case, not a bug.
 - **`-rcode` values are uppercase in the response but lowercase on the command
   line** (`-rcode noerror`). Getting the case wrong silently filters everything.
 - **`-rtf` is an absence filter.** It returns entries with *no* records of the

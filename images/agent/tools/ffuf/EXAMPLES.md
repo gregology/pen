@@ -197,10 +197,18 @@ $ jq -r '.results[]?.url' ff13.json
 http://127.0.0.1:8090/admin/
 http://127.0.0.1:8090/index.html
 
-$ ffuf -input-cmd 'printf "admin/\nindex.html\n"' -input-num 2 -u http://127.0.0.1:8090/FUZZ -mc all -fc 404 -t 5 -s
-admin/
-index.html
+$ ffuf -input-cmd 'printf "admin/\nindex.html\n"' -input-num 2 -u http://127.0.0.1:8090/FUZZ -mc all -fc 404 -t 5 -s -of json -o ff13b.json -debug-log /tmp/ffuf-debug.log
+$ jq -r '.results[]?.url' ff13b.json
+(no output)
+$ grep -o 'net/url: invalid control character in URL' /tmp/ffuf-debug.log | head -1
+net/url: invalid control character in URL
 ```
+
+`-input-cmd` does not line-split the command's stdout: the whole output is
+substituted at `FUZZ` as one value, newlines included, so the URL is rejected
+(`net/url: invalid control character in URL`) and the run matches nothing.
+`-input-num` sizes the generated set, it does not enumerate lines. For a list
+of inputs, pipe it in with `-w -` as above.
 
 ## 10. Extension expansion behaves literally
 

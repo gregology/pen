@@ -13,7 +13,7 @@ changes server state.
 | Version | 3.2.4 (upstream source tarball, sha256-verified at image build) |
 | Path | `/usr/local/bin/testssl.sh` → `/opt/testssl.sh/testssl.sh` |
 | Shell | bash; drives a bundled `/opt/testssl.sh/bin/openssl.Linux.x86_64` |
-| Dependency | `bsdextrautils` — installed by `install.sh`, see below |
+| Dependency | `bsdextrautils` (hexdump) and `bind9-dnsutils` (dig, host, nslookup) — installed by `install.sh`, see below |
 | Runtime | root not required; no TTY required |
 
 **The `hexdump` dependency is load-bearing and is installed deliberately.**
@@ -26,6 +26,14 @@ parsing, so `--version` and `--help` fail too, with
 `testssl.sh --version`, so a build either produces a working tool or fails
 loudly. If you ever see that fatal error, the image was built from a broken
 install script, not from a target problem.
+
+**The name-resolver dependency is equally load-bearing.** `check_resolver_bins()`
+runs unconditionally and aborts with exit **249** and
+`Fatal error: Neither "dig", "host", "drill" nor "nslookup" is present` when none
+of those binaries is on `PATH`; a numeric URI, `--ip` and `--nodns none` do not
+avoid it. `install.sh` therefore installs `bind9-dnsutils`, which provides `dig`,
+`host` and `nslookup`, and asserts all three at build time. A scan that exits 249
+means a broken image, not a target problem.
 
 ## Rules that apply to this tool
 
@@ -145,7 +153,7 @@ testssl.sh --quiet --color 0 -t postgres db.$TARGET
 ### Flat JSON (`--jsonfile`) — use this for jq
 
 A JSON **array**; each element has keys `id, ip, port, severity, finding`.
-Severity values: `OK, INFO, LOW, MEDIUM, HIGH, WARN, CRITICAL`.
+Severity values: `OK, INFO, LOW, MEDIUM, HIGH, WARN, CRITICAL, FATAL`.
 
 ```json
 {"id":"SSLv3","ip":"example.com/172.66.147.243","port":"443","severity":"OK","finding":"not offered"}
@@ -190,7 +198,7 @@ SSL Labs rating block:
 ## Failure modes
 
 - **There is no `--port` flag.** `testssl.sh … 127.0.0.1 --port 8443` exits 254
-  with `<URI> always needs to be the last parameter.` Put the port in the URI.
+  with `Fatal error: URI comes last`. Put the port in the URI.
 - **It refuses to overwrite output files.**
   `Fatal error: non-empty "…json" exists. Either use "--append" or (re)move it`,
   exit **253**. Use a unique filename per run.
@@ -207,9 +215,10 @@ SSL Labs rating block:
   `Local problem: Your … openssl does not support -tls1_3`. `--openssl
   /usr/bin/openssl` uses the system OpenSSL (3.0.x) instead — re-verify the
   report before drawing conclusions either way.
-- **Exit codes:** `0` a completed run, `253` file-exists refusal, `254` usage
-  error, `244` resource problems. A run that aborts early still prints a
-  plausible-looking partial report, so check the code and the log.
+- **Exit codes:** `0` a completed run, `249` no name resolver present (a broken
+  image), `253` file-exists refusal, `254` usage error, `244` resource problems. A
+  run that aborts early still prints a plausible-looking partial report, so check
+  the code and the log.
 - **Self-signed and mismatched certificates produce caps, not silence.** Read
   the cap reasons, not just the letter grade.
 - **Mass testing turns on `--warnings batch`**, which stops the batch on the

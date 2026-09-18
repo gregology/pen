@@ -12,21 +12,22 @@ masscan "$TARGET" -p22,80,443 --rate 1000 --echo > "$WORK/masscan.conf"
 cat "$WORK/masscan.conf"
 ```
 
-`--echo` resolves everything — adapter, `adapter-ip`, `router-mac`, rate, wait —
-and exits 0 without transmitting. Read it for three things:
+`--echo` prints the parsed configuration and exits 0 without transmitting. The
+keys it prints are `seed`, `rate`, `shard`, `retries`, `nocapture`, `adapter`,
+`ports` and `range` — not `adapter-ip`, `router-mac` or `wait` — so it answers
+which interface was chosen and at what rate, and nothing about the source
+address the target will log.
 
-- which interface was chosen (must be the tunnel in this container),
-- `adapter-ip` (the source address the target will log),
-- `rate`/`wait` (what you think you set).
-
-Then dry-run the packet plan:
+The echoed file is not a usable config as written: `masscan -c` aborts on it
+with `CONF: unknown config option: nocapture=servername` (exit 1) until its
+`nocapture` line is removed. Neither is `--offline` an option — it fails with
+`[-] FAILED: bad packet template` on every adapter, loopback included. To see
+the targets a scan would cover, use the list scan, which expands them without
+sending:
 
 ```bash
-masscan -c "$WORK/masscan.conf" --offline --packet-trace --rate 10 2>&1 | head -40
+masscan "$TARGET" -p22,80,443 -sL
 ```
-
-`--offline` transmits nothing; `--packet-trace` prints what would have gone out.
-This is the only way to preview a scan whose real traffic you cannot unsend.
 
 ## 2. Single host, full port range, JSON evidence
 
@@ -40,7 +41,7 @@ jq -r '.[] | .ip as $ip | .ports[] | select(.status=="open") | "\($ip):\(.port)/
 per open port. If the file is empty:
 
 ```bash
-masscan "$TARGET" -p0-65535 --rate 1000 --echo | grep -E 'adapter|router|rate'
+masscan "$TARGET" -p0-65535 --rate 1000 --echo | grep -E 'adapter|rate'
 ```
 
 An empty result with a plausible config usually means the target answered RSTs

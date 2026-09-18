@@ -162,11 +162,12 @@ somewhere specific.
 
 ## Output and parsing
 
-`--json -o FILE` writes JSONL. Three record types, in order:
+`--json -o FILE` writes JSONL. Four record types:
 
 - `configuration` — the effective settings (echo them into the report: it is
   the proof of what was run);
 - `response` — one per reported response;
+- `log` — a log line, `{"type":"log",...}`, emitted during the scan;
 - `statistics` — totals at the end of the scan.
 
 `response` fields (verified):

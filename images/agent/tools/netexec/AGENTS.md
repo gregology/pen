@@ -17,8 +17,10 @@ it the natural place to keep an engagement's credential and host inventory.
 > image ships `dploot` 3.2.2 and `nxc smb` works — verified end to end against
 > a loopback SMB server. `nxc smb --version` prints a version on the broken
 > image too, so if SMB misbehaves, run
-> `python3 -c "import nxc.protocols.smb.dpapi"` first: that is what fails when
-> the pin is missing.
+> `/opt/venvs/netexec/bin/python -c "import nxc.protocols.smb.dpapi"` first —
+> that is what fails when the pin is missing. The interpreter matters: bare
+> `python3` is `/opt/py/bin/python3`, which has no `nxc` and reports
+> `ModuleNotFoundError` even on a good image.
 
 ## Installation and location
 
@@ -293,8 +295,9 @@ pip resolution installs dploot 4.x, whose module lives at
 `mremoteng`, `dpapi_hash`, `mobaxterm`, `vnc`, `rdcman`, `firefox` and `wam`
 modules for all protocols. The current image ships dploot 3.2.2, the import
 succeeds and `nxc smb` runs; check with
-`python3 -c "import nxc.protocols.smb.dpapi"` rather than `nxc smb --version`,
-which never loads the protocol module.
+`/opt/venvs/netexec/bin/python -c "import nxc.protocols.smb.dpapi"` (the venv
+interpreter) rather than `nxc smb --version`, which never loads the protocol
+module.
 
 **No JSON.** 1.5.1 has `--log` (text) and the workspace DB. If a consumer needs
 JSON, query the SQLite tables and emit it yourself with `python3 -c`.

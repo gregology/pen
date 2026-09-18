@@ -14,7 +14,7 @@ gentler option.
 | | |
 |---|---|
 | Version | 2:1.3.2+ds1-1 (Debian bookworm; Debian patches only the build system and spelling) |
-| Binary | `/usr/bin/masscan`, man page `masscan(8)` |
+| Binary | `/usr/bin/masscan` — no man page in this image (nothing ships `masscan(8)`, and there is no `man` binary); a bare `masscan` prints the upstream usage output |
 | Privileges | plain mode-0755 binary, no setuid, no file capabilities — needs root / `CAP_NET_RAW` |
 
 masscan contains no privilege check of its own; it asks libpcap for an
@@ -45,15 +45,15 @@ a permission problem.
 | `--retries N` | Repeat each probe N times, one second apart, regardless of whether a reply arrived (stateless). |
 | `--ttl N` | TTL of outgoing packets (default 255). |
 | `-c FILE`, `--conf FILE`, `--resume FILE` | Read options from a config file; `--resume` re-reads a paused scan and appends to its output. |
-| `--echo` | Do not scan: print the fully resolved configuration (including the adapter and source IP masscan chose) and exit 0. |
+| `--echo` | Do not scan: print the parsed configuration — `seed`, `rate`, `shard`, `retries`, `nocapture`, `adapter`, `ports`, `range` — and exit 0. It does **not** print `wait`, `adapter-ip` or `router-mac`. |
 | `--nmap` | Print the nmap-compatible option equivalents and exit. |
 | `--iflist` | List interfaces and exit. |
 | `--readscan FILE` | Read a `-oB` binary result file and re-emit it in another format. |
 | `--shards x/y` | Split the scan across y instances; run instance x. |
 | `--resume-index N`, `--resume-count N` | Chop a scan into index ranges. |
-| `--offline` | Do not transmit; combine with `--packet-trace` to inspect. |
+| `--offline` | **Broken in this build** — fails with `[-] FAILED: bad packet template` (exit 1) on every adapter, loopback included, with or without `--packet-trace`. Use `-sL` or `--echo` for a no-transmit check. |
 | `--packet-trace` | Print sent/received packet summaries — only usable at low rates. |
-| `--pcap FILE`, `--seed N`, `--rotate*`, `--append-output`, `--interactive`, `--ping`, `--http-user-agent UA`, `-sL` | Packet capture, deterministic ordering, log rotation, appending, live console output, ICMP echo with the scan, HTTP UA override, and "generate a random address list instead of scanning". |
+| `--pcap FILE`, `--seed N`, `--append-output`, `--interactive`, `--ping`, `--http-user-agent UA`, `-sL` | Packet capture, deterministic ordering, appending, live console output, ICMP echo with the scan, HTTP UA override, and list scan — `-sL` expands the targets and transmits nothing. `--rotate-period` is rejected by this build. |
 
 ## Examples
 
@@ -106,13 +106,20 @@ local subnet with `--adapter-ip`.
 
 ```bash
 masscan 10.0.0.0/24 -p80 --rate 1000 --echo | tee $WORK/masscan.conf
-masscan -c $WORK/masscan.conf --offline --packet-trace --rate 10
+masscan 10.0.0.0/24 -p80 --rate 1000 -sL
 ```
 
-`--echo` prints the resolved config — adapter, source IP, router MAC, rate, wait
-— and exits without scanning. `--offline --packet-trace` shows exactly which
-packets would be sent. Both are cheap insurance before a scan whose traffic
-cannot be recalled.
+`--echo` prints the parsed configuration and exits 0 without scanning; the keys
+it prints are `seed`, `rate`, `shard`, `retries`, `nocapture`, `adapter`,
+`ports` and `range` — not `wait`, `adapter-ip` or `router-mac`, so read the
+adapter and the rate from it, not the source address. `-sL` expands the target
+list and transmits nothing, which is the check that the range parsed as
+intended.
+
+The echoed file is not reusable as-is: `masscan -c` aborts on it with
+`CONF: unknown config option: nocapture=servername` (exit 1) until the
+`nocapture` line is removed. There is no offline dry run in this build —
+`--offline` fails on every adapter (see Failure modes).
 
 ## Output formats
 
@@ -142,7 +149,7 @@ results print to the console as they are received.
 - **`FAIL: target IP address list empty`** (exit 1) when no target is given —
   including `masscan -p80`. **`FAIL: no ports were specified`** (exit 1) when
   `-p` is missing. Both are fatal, unlike a bare `masscan`, which prints usage
-  and exits 0.
+  and exits 1.
 - **`FAIL: range too big, need confirmation`** (exit 1) for target sets over
   1e9 addresses without any `--exclude`. Deliberate: add
   `--exclude 255.255.255.255` as a confirmation if the scan really is that wide.
@@ -170,8 +177,10 @@ results print to the console as they are received.
 - **`--wait` governs completeness, not speed.** Exiting immediately after
   transmit loses slow replies; the default 10 s is usually right, and
   `--wait forever` never terminates.
-- **`--offline` still "scans"** and produces no results — it is a dry run, not a
-  quieter real scan.
+- **`--offline` never works.** `masscan 10.0.0.5 -p80 --offline --rate 10` fails
+  with `[-] FAILED: bad packet template` and exit 1 — with or without
+  `--packet-trace`, on any adapter, loopback included. It is not a dry run and
+  not a quieter real scan; use `-sL` and `--echo` instead.
 
 ## Notes
 

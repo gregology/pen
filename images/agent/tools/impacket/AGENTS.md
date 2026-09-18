@@ -17,7 +17,7 @@ explicit human confirmation per target, before the first packet.
 
 | Item | Value |
 |---|---|
-| Version | **0.13.1** (the current PyPI release; check with `python3 -c "from importlib.metadata import version; print(version('impacket'))"`) |
+| Version | **0.13.1** (the current PyPI release; check with `/opt/venvs/impacket/bin/python3 -c "from importlib.metadata import version; print(version('impacket'))"`) |
 | Provenance | Installed from the PyPI release into its own venv, unpinned — see *Limits* for why |
 | Location | `/opt/venvs/impacket/bin/*.py` (virtualenv `/opt/venvs/impacket`, on `PATH`) |
 | Library | `/opt/venvs/impacket/lib/python3.11/site-packages/impacket` |
@@ -90,7 +90,7 @@ Scripts verified present (not exhaustive): `secretsdump.py`, `GetNPUsers.py`,
 | `lookupsid.py` | yes | yes | **no** | yes | yes |
 | `reg.py` | yes | yes | yes | yes | yes |
 | `smbserver.py` | yes | — | yes | — | — |
-| `ntlmrelayx.py` | yes | yes | — | **no** (`-ip` instead) | — |
+| `ntlmrelayx.py` | **no** (`-hashes-smb`, `-machine-hashes`) | yes | — | **no** (`-ip` instead) | — |
 
 ### The scripts that matter most
 
@@ -115,9 +115,10 @@ Useful interactive commands (verified `help` output): `shares`, `use SHARE`,
 `put FILE`, `cat FILE`, `rm`, `mkdir`, `rmdir`, `mount`, `list_snapshots`,
 `who`, `info`, `acl`, `dfs_info`, `dfs_mode`, `close`, `logoff`, `exit`.
 `get`/`put` take a **single** argument (remote filename / local filename) and
-transfer to the current local/remote directory — `get file /tmp/out` fails with
-`No such file or directory: 'file /tmp/out'`. For scripted use, feed commands on
-stdin or via `-inputfile FILE`, and start the invocation with the credentials.
+transfer to the current local/remote directory — `get file /tmp/out` fails,
+because the whole string is taken as the remote filename. For scripted use, feed
+commands on stdin or via `-inputfile FILE`, and start the invocation with the
+credentials.
 
 ### `ntlmrelayx.py`
 
@@ -230,8 +231,8 @@ CORP\alice:aes256-cts-hmac-sha1-96:…
 `-outputfile PREFIX` writes one file per section alongside the stdout copy
 (suffixes read from `impacket/examples/secretsdump.py`): `PREFIX.sam` for the
 SAM hashes, `PREFIX.secrets` for LSA secrets, and `PREFIX.ntds` (plus
-`PREFIX.ntds.kerberos`, `PREFIX.ntds.cleartext`, `PREFIX.ntds.trustkeys`) for
-NTDS. Filter stdout with `grep -E '^[^[]'` or `awk -F: 'NF>=4'`.
+`PREFIX.ntds.kerberos`, `PREFIX.ntds.cleartext`) for NTDS. Filter stdout with
+`grep -E '^[^[]'` or `awk -F: 'NF>=4'`.
 
 `GetUserSPNs.py -request`:
 
@@ -292,10 +293,11 @@ release tracks upstream, so the installed version may be newer than described.
 
 **`hashlib.new('md4')` does not work in this image** (OpenSSL 3 legacy provider
 is not enabled): `ValueError: [unsupported hash type md4]`. Compute NT hashes
-with impacket itself:
+with impacket itself — bare `python3` is `/opt/py/bin/python3`, which cannot
+import impacket, so use the venv interpreter:
 
 ```bash
-python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('Password1').hex())"
+/opt/venvs/impacket/bin/python3 -c "from impacket.ntlm import compute_nthash; print(compute_nthash('Password1').hex())"
 ```
 
 **`-hashes` needs the right half.** `-hashes :NTHASH` (empty LM) is the usual

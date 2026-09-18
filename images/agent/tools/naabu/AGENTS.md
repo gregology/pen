@@ -235,6 +235,11 @@ With `-json`, each line is an object. The key set depends on the input form:
 {"host":"localhost","ip":"127.0.0.1","timestamp":"2026-09-17T20:48:41.824739243Z","port":8099,"protocol":"tcp","tls":false}
 ```
 
+A single open port can appear on more than one line: in the verification run one
+open loopback port produced two `-json` lines about 2 seconds apart while
+`-silent` printed one, so a naive line count over `-json` output can
+double-count.
+
 | Field | Meaning |
 |---|---|
 | `.host` | Host as supplied. **Absent when the input was an IP.** |
@@ -247,7 +252,7 @@ With `-json`, each line is an object. The key set depends on the input form:
 
 `-eof` removes fields and takes the internal names that `-lof` prints (24 of
 them, including `host`, `ip`, `port`, `protocol`, `tls`, `cdnname`,
-`isccdnip`, `product`, `version`). `-lof` itself prints that list and produces
+`iscdnip`, `product`, `version`). `-lof` itself prints that list and produces
 no scan output.
 
 ```bash
@@ -269,7 +274,7 @@ naabu -host "$TARGET" -top-ports 100 -json -eof tls -silent -duc
 ```
 
 Timing reference on this image: `naabu -host 127.0.0.1 -top-ports 1000` takes
-about 4 seconds against loopback; a real target is bounded by `-rate` and RTT,
+about 5 seconds against loopback; a real target is bounded by `-rate` and RTT,
 not by naabu.
 
 ## Chaining with the rest of the toolchain
@@ -324,6 +329,8 @@ subfinder -d "$DOMAIN" -silent -rl 5 -duc \
 - **`.host` is absent from JSON when the input was an IP.** A `jq` expression
   that assumes `.host` exists will emit `null:port` for IP inputs. Use
   `.host // .ip`.
+- **An unknown `-eof` field is silently ignored.** A name that is not in the
+  `-lof` list is not rejected: the run completes and simply drops nothing.
 - **Full-range scans are enormous.** `-tp full` is 65,535 ports per host. With
   `-sa` (scan all IPs) on a multi-A-record name, that multiplies again. Check
   what you are actually asking for before running it.

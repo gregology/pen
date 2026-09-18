@@ -17,7 +17,7 @@ cheap and safe; everything after that is an exploitation decision.
 |---|---|
 | Binary | `/usr/bin/sqlmap` (Debian package; runs `python3 /usr/share/sqlmap/sqlmap.py`) |
 | Version | 1.7.2#stable (Debian bookworm) |
-| Program data | `/usr/share/sqlmap/` — `tamper/` (71 scripts), `data/txt/user-agents.txt`, `data/xml/` |
+| Program data | `/usr/share/sqlmap/` — `tamper/` (69 scripts), `data/txt/user-agents.txt`, `data/xml/` |
 | User data | `/root/.local/share/sqlmap/` — `history/`, `output/` |
 | Default output | `/root/.local/share/sqlmap/output/` |
 | Wordlists | `/opt/wordlists/SecLists/Discovery/Web-Content/` for `--crawl`-adjacent work |
@@ -81,7 +81,7 @@ Debian package comparing itself against upstream, not a failure.
 | `--parse-errors` | Show DBMS error messages from responses |
 | `--flush-session` | Forget the cached session for this target and retest |
 | `--answers=…` | Preset answers (e.g. `"quit=N,follow=N"`) |
-| `--list-tampers` | Print the tamper scripts and exit (71 in this build) |
+| `--list-tampers` | Print the tamper scripts and exit (69 in this build) |
 
 ### Enumeration and extraction
 

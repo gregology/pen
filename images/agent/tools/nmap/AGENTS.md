@@ -20,8 +20,9 @@ is.
 
 The agent runs as root, which matters: nmap silently degrades to a TCP connect
 scan when it cannot open a raw socket. Running as an unprivileged user makes
-`-sS`, `-sU` and `-O` abort with `You requested a scan type which requires root
-privileges.` and exit code 1, so never run nmap through `su`/`setpriv`.
+`-sS`, `-sU` and `-O` abort with a root-privileges error and exit code 1 — for
+`-O` the text is `TCP/IP fingerprinting (for OS scan) requires root privileges.`
+— so never run nmap through `su`/`setpriv`.
 
 There is no `man` binary in the image. `nmap --help` is the only local reference;
 the full manual is at <https://nmap.org/book/man.html>.
@@ -32,9 +33,11 @@ the full manual is at <https://nmap.org/book/man.html>.
    current engagement is an attack. A hostname in a wordlist is not authorization.
    Scope expansion — a new host, a new port range, a new script category — needs
    explicit confirmation before the packets leave, not after.
-2. **All traffic exits the WireGuard tunnel.** The agent has one non-loopback
-   interface; there is no route around it and no per-tool proxy setting that
-   changes that. Confirm with `ip -o addr` before a scan if the result matters.
+2. **All traffic exits the WireGuard tunnel.** Containment is the kill switch in
+   the shared gateway namespace — iptables there permits outbound traffic only
+   through `wg0` — not the interface count and not any per-tool proxy setting.
+   Confirm with `ip -o addr` and the routing table before a scan if the result
+   matters.
 3. **Conservative intensity by default.** `-T3` (the default) or lower. `-T4` and
    `-T5` assume a fast, reliable network and a target that tolerates bursts; on a
    home connection or a small VPS they cause false `filtered` results, dropped
@@ -158,9 +161,9 @@ Detection, scripts, timing, output
 (grepable). The XML is the stable interface.
 
 ```xml
-<nmaprun scanner="nmap" args="nmap -sV -p 8080 --script=http-title 127.0.0.1" version="7.93" xmloutputversion="1.05">
+<nmaprun scanner="nmap" args="nmap -sV -p 8090 --script=http-title 127.0.0.1" version="7.93" xmloutputversion="1.05">
 <host><status state="up" reason="syn-ack"/><address addr="127.0.0.1" addrtype="ipv4"/>
-<ports><port protocol="tcp" portid="8080">
+<ports><port protocol="tcp" portid="8090">
   <state state="open" reason="syn-ack"/>
   <service name="http" product="SimpleHTTPServer" version="0.6" extrainfo="Python 3.11.2">
     <cpe>cpe:/a:python:simplehttpserver:0.6</cpe></service>
@@ -186,7 +189,7 @@ PY
 `xmllint` is installed (`/usr/bin/xmllint`); XPath is the quickest one-liner:
 
 ```bash
-xmllint --xpath '//port[state/@state="open"]/@portid' scan.xml      # -> portid="8080"
+xmllint --xpath '//port[state/@state="open"]/@portid' scan.xml      # -> portid="8090"
 xmllint --xpath 'string(//host/address/@addr)' scan.xml
 xmllint --xpath '//script/@id' scan.xml
 ```
@@ -195,7 +198,7 @@ Grepable output is one line per host and parses with `awk`/`cut`:
 
 ```
 Host: 127.0.0.1 (localhost)	Status: Up
-Host: 127.0.0.1 (localhost)	Ports: 8080/open/tcp//http//SimpleHTTPServer 0.6 (Python 3.11.2)/
+Host: 127.0.0.1 (localhost)	Ports: 8090/open/tcp//http//SimpleHTTPServer 0.6 (Python 3.11.2)/
 ```
 
 `nmap` exits 0 whenever the scan ran, including when every port is `filtered`
@@ -232,9 +235,9 @@ scan actually sent. `scapy` can replay a single probe from that pcap.
 ## Limits, failure modes and gotchas
 
 - **Root-only scan types.** `-sS`, `-sU`, `-O`, `-sN/-sF/-sX` and raw-packet
-  features fail as non-root with `You requested a scan type which requires root
-  privileges.` and exit 1. Connect scans (`-sT`) work unprivileged and are slower
-  and visible to the target.
+  features fail as non-root and exit 1; `-O` reports `TCP/IP fingerprinting (for
+  OS scan) requires root privileges.` Connect scans (`-sT`) work unprivileged and
+  are slower and visible to the target.
 - **`-O` needs a good fingerprint.** With fewer than one open and one closed port
   nmap warns `OSScan results may be unreliable because we could not find at least
   1 open and 1 closed port` and reports only aggressive guesses. Use
