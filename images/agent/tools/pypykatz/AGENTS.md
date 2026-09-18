@@ -20,7 +20,7 @@ when the extracted material is a hash to use rather than crack.
 ## Commands
 
 Top-level in 0.6.13: `live`, `lsa`, `registry`, `dpapi`, `crypto`, `kerberos`,
-`remote`, `smb`, `ldap`, `rdp`, `parser`, plus `version`, `banner`, `logo`.
+`smb`, `ldap`, `rdp`, `parser`, plus `version`, `banner`, `logo`.
 
 **There is no `ai` subcommand and no command spelled `lsass`.** The LSASS
 command is `lsa`.
@@ -47,7 +47,7 @@ command is `lsa`.
 pypykatz registry <SYSTEM> [--sam FILE] [--security FILE] [--software FILE] [-o FILE] [--json]
 pypykatz live lsa [--json] [-o FILE] [-g] [--method procopen|handledup] [-p …]
 pypykatz smb lsassdump|lsassfile|regdump|regfile|secretsdump|dcsync|shareenum|printnightmare|client
-pypykatz dpapi keys|blob|blobfile|cred|vcred|vpol|wifi|chrome|securestring|tcap
+pypykatz dpapi prekey|minidump|preferredkey|masterkey|masterkeypvk|credential|vcred|vpol|securestring|blob|chrome|wifi|describe|cloudapkd|winhellopin
 pypykatz crypto nt|lm|dcc|gppass|vnc|ofscan
 pypykatz parser ntds
 pypykatz kerberos …
@@ -104,7 +104,7 @@ cached credentials. `--software` is only needed for some DPAPI/key material.
 
 ```bash
 pypykatz crypto nt 'Sup3rS3cret!'          # NT hash of a password
-pypykatz crypto dcc 'Sup3rS3cret!'         # DCC v1 (cache) hash
+pypykatz crypto dcc alice 'Sup3rS3cret!'   # DCC v1 (cache) hash
 pypykatz crypto gppass '<cpassword from Groups.xml>'
 ```
 
@@ -136,8 +136,10 @@ impacket `-hashes`) is generated from the JSON or the grep rows with `jq`/`awk`.
   subcommand prints argparse usage and exits non-zero.
 - **`live` is Windows-only.** On Linux the live paths need Windows APIs; use
   `lsa minidump` against a dump instead.
-- **A dump of the wrong process parses to an empty result, quietly.** `lsa info`
-  is the cheap pre-check.
+- **Wrong input does not always fail quietly.** A dump of the wrong process can
+  parse to an empty result, but `lsa info` and `crypto gppass` raise a raw
+  Python traceback on input they cannot parse. `lsa info` is still the cheap
+  pre-check.
 - **The `smb` command group can vanish.** `__main__.py` imports the SMB helper
   inside a `try/except` and prints the exception; if `aiosmb` or its
   dependencies are broken in the venv, `pypykatz smb …` is simply absent and
