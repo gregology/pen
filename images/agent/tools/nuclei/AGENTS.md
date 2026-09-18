@@ -16,7 +16,7 @@ misconfiguration templates in one pass.
 | Templates | `/root/nuclei-templates` (baked at image build; 13,742 YAML files) |
 | Config | `/root/.config/nuclei/config.yaml` (created on first run if absent) |
 | Cache | `/root/.cache/nuclei/` |
-| PDCP dir | `/root/.pdcp` |
+| PDCP dir | `/root/.pdcp` (a path nuclei reports; it does not create it) |
 
 Templates ship in the image because a scanner with no templates is inert. They
 are installed at build time, so an ordinary scan needs no network access to
@@ -246,7 +246,6 @@ Every flag below is from `nuclei -h` on 3.11.1.
 | `.info.metadata` | Free-form metadata block. Omitted when absent. |
 | `.info.classification` | CVE/CWE/CVSS block. **`cve-id` and `cwe-id` are arrays**, e.g. `{"cve-id":null,"cwe-id":["cwe-693"]}`. |
 | `.matcher-name` | Which matcher fired, when the template names its matchers (e.g. `strict-transport-security`). |
-| `.extractor-name` | Which extractor fired, when the template names extractors. |
 | `.type` | Protocol that matched: `http`, `dns`, `ssl`, `tcp`, … |
 | `.host` / `.port` / `.scheme` / `.url` | Target context. |
 | `.matched-at` | Exact URL or string that matched. `.matched` is not emitted by 3.11.1. |
@@ -255,7 +254,7 @@ Every flag below is from `nuclei -h` on 3.11.1.
 | `.timestamp` | When the match was recorded. |
 | `.curl-command` | Reproducer for HTTP findings. Not present on DNS/TCP/SSL matches. |
 | `.request` / `.response` | Raw HTTP exchange. Present by default; removed by `-or`. |
-| `.matcher-status` | Present when `-ms` is passed; `true` for a match. |
+| `.matcher-status` | Emitted on every result: `true` for a match, `false` otherwise. `-ms` makes the failures visible. |
 
 A real finding from `http-misconfiguration/http-missing-security-headers.yaml`
 against a local server, trimmed:
@@ -379,21 +378,22 @@ subfinder -d "$DOMAIN" -silent -duc \
   except noise". `-severity` and `-tags` combine as AND, not OR.
 - **DAST templates do not run unless `-dast` is given.** A template tagged
   `fuzz` produces nothing without it.
-- **Headless templates cannot work in this image.** `-headless` needs a
-  Chrome/Chromium binary. None is installed, and the Chromium that katana and
-  httpx download at runtime cannot launch (missing `libnss3.so` and 13 other
-  shared libraries). Do not enable `-headless` and expect results; a headless
-  template set that produces nothing has not tested the target.
-- **A template whose only tags are default-excluded is dropped, and the error
-  is indistinguishable from having no templates.** Verified: a template with
-  `tags: local` is filtered out and `-t <that file>` aborts with
-  `[FTL] Could not run nuclei: no templates provided for scan`, while the same
-  template with `tags: fixture` runs normally. `-tl -t <dir>` shows which
-  templates actually loaded. Force them back with `-itags local`, or drop the
-  `local` tag from templates you author.
-- **`-validate` passing does not mean the template will load.** A template can
-  pass `nuclei -validate -t <file>` and still be filtered out of the run. Use
-  `-tl -t <dir>` to confirm what the loader accepted.
+- **Headless templates need a Chromium download on first use.** `-headless`
+  needs a Chrome/Chromium binary and none is baked into the image. The
+  Chromium that katana and httpx download at runtime (about 150 MB from
+  `storage.googleapis.com`, needs egress) does launch here. The failure mode to
+  watch for is a headless template set that produces nothing because the
+  download could not happen, not a missing shared library.
+- **`-etags` removes a template silently, and the error is indistinguishable
+  from having no templates.** Verified: a template with `tags: local` loads and
+  runs normally in 3.11.1, but `nuclei -t <that file> -etags local` aborts with
+  `[FTL] Could not run nuclei: no templates provided for scan`. `-tl -t <dir>`
+  shows which templates actually loaded. Force one back with `-itags local`, or
+  drop the tag from templates you author.
+- **`-validate` passing does not mean the template will run.** A template can
+  pass `nuclei -validate -t <file>` and then be removed from the run by
+  `-etags`, `-tags` or `-exclude-templates`. Use `-tl -t <dir>` to confirm what
+  the loader accepted.
 - **`-rl` is global, not per host.** Scanning 50 hosts at `-rl 150` gives each
   host 3 rps. `-per-host-rate-limit` flips that, and then the global limit
   becomes unlimited — read it before using it.

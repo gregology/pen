@@ -220,28 +220,39 @@ Verified output for a matching target:
  "template-path":"/root/nuclei-templates/custom-docs/fixture-check.yaml",
  "template-encoded":"aWQ6IGRvY3MtZml4dHVyZS1jaGVjaw...",
  "info":{"name":"Docs Fixture Check","author":["docs-verification"],"tags":["fixture"],"severity":"low"},
- "extractor-name":"page-title","type":"http","host":"127.0.0.1","port":"8099","scheme":"http",
+ "type":"http","host":"127.0.0.1","port":"8099","scheme":"http",
  "url":"http://127.0.0.1:8099","matched-at":"http://127.0.0.1:8099",
  "extracted-results":["Pen Fixture Home"],"ip":"127.0.0.1","timestamp":"...",
  "curl-command":"curl -X 'GET' ...","matcher-status":false,"request":"...","response":"..."}
 ```
 
 Locally authored templates carry `template-encoded` (the template itself)
-instead of `template-url`, and `extractor-name` appears when the extractor is
-named.
+instead of `template-url`, and the values the extractor pulled out appear in
+`extracted-results`. There is no `extractor-name` field in 3.11.1.
 
-**The trap:** change that `tags: fixture` to `tags: local` and the template
-disappears:
+**The trap is the opposite of what it looks like.** Change that `tags: fixture`
+to `tags: local` and the template still runs — `local` is not excluded
+automatically:
 
+```bash
+nuclei -u http://127.0.0.1:8099 -t custom-docs/fixture-check.yaml \
+  -jsonl -silent -duc -ni
+# the finding, rc=0
 ```
-[FTL] Could not run nuclei: no templates provided for scan
+
+It is the explicit exclusion that eats it:
+
+```bash
+nuclei -u http://127.0.0.1:8099 -t custom-docs/fixture-check.yaml \
+  -etags local -jsonl -silent -duc -ni
+# [FTL] Could not run nuclei: no templates provided for scan
 ```
 
-`local` is a default-excluded tag. The template validates fine
+`local` is a tag `-etags` accepts. The template validates fine
 (`nuclei -validate -t <file>` says "All templates validated successfully"), it
-just never loads, and the error blames your template set. `-tl -t custom-docs/`
-shows what actually loaded. Either avoid `local`, or force it back with
-`-itags local`.
+is dropped from the run, and the error blames your template set. `-tl -t
+custom-docs/` shows what actually loaded. Either leave the tag off templates
+you author, or force it back with `-itags local`.
 
 ## 9. Prove a scan actually happened before reporting "clean"
 
