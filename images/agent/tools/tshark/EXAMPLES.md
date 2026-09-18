@@ -9,8 +9,8 @@ examples are safe to repeat; the one external example is a single request to
 
 ```bash
 mkdir -p /tmp/lab && cd /tmp/lab
-nohup python3 -m http.server 8080 --bind 127.0.0.1 >httpd.log 2>&1 &
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
+nohup python3 -m http.server 8090 --bind 127.0.0.1 >httpd.log 2>&1 &
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/
 ```
 
 ```
@@ -20,8 +20,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ## 1. Capture loopback HTTP and read it back
 
 ```bash
-( for i in 1 2 3; do curl -s -o /dev/null http://127.0.0.1:8080/; sleep 0.2; done ) &
-tshark -i lo -f 'tcp port 8080' -a duration:5 -w /tmp/lab/http.pcap
+( for i in 1 2 3; do curl -s -o /dev/null http://127.0.0.1:8090/; sleep 0.2; done ) &
+tshark -i lo -f 'tcp port 8090' -a duration:5 -w /tmp/lab/http.pcap
 ```
 
 ```
@@ -34,9 +34,9 @@ tshark -r /tmp/lab/http.pcap -Y http.request \
 ```
 
 ```
-127.0.0.1	40944	GET	/	127.0.0.1:8080
-127.0.0.1	40962	GET	/	127.0.0.1:8080
-127.0.0.1	40976	GET	/	127.0.0.1:8080
+127.0.0.1	40944	GET	/	127.0.0.1:8090
+127.0.0.1	40962	GET	/	127.0.0.1:8090
+127.0.0.1	40976	GET	/	127.0.0.1:8090
 ```
 
 Packet counts and source ports depend on how many requests finish before the
@@ -44,9 +44,10 @@ autostop fires (a repeat run captured 12 packets with one request); the filters
 are the reproducible part, not the line count.
 
 The capture filter (`-f`) limited what was recorded; the display filter (`-Y`)
-selected the requests afterwards. Swapping them is the most common mistake and
-fails with `Only read filters, not capture filters, can be specified when reading
-a capture file.` / `"port" was unexpected in this context.`
+selected the requests afterwards. Swapping them is the most common mistake:
+reading with `-f` fails with `Only read filters, not capture filters, can be
+specified when reading a capture file.`, and capturing with `-Y 'tcp port 8090'`
+fails to parse as a display filter.
 
 ## 2. Capture one authorized external TLS session and extract the SNI
 
@@ -91,9 +92,9 @@ tshark -r /tmp/lab/http.pcap -Y http.request \
 
 ```
 frame.number,ip.src,http.host,http.request.uri
-"4","127.0.0.1","127.0.0.1:8080","/"
-"16","127.0.0.1","127.0.0.1:8080","/"
-"28","127.0.0.1","127.0.0.1:8080","/"
+"4","127.0.0.1","127.0.0.1:8090","/"
+"16","127.0.0.1","127.0.0.1:8090","/"
+"28","127.0.0.1","127.0.0.1:8090","/"
 ```
 
 One row per captured request, so the row count matches whatever landed in the
@@ -150,9 +151,9 @@ tshark -r /tmp/lab/http.pcap -q -z follow,tcp,ascii,0
 Follow: tcp,ascii
 Filter: tcp.stream eq 0
 Node 0: 127.0.0.1:40944
-Node 1: 127.0.0.1:8080
+Node 1: 127.0.0.1:8090
 GET / HTTP/1.1
-Host: 127.0.0.1:8080
+Host: 127.0.0.1:8090
 User-Agent: curl/7.88.1
 Accept: */*
 ```
@@ -174,9 +175,9 @@ assuming they are HTML.
 ## 6. Ring buffer for a bounded long capture
 
 ```bash
-( for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8080/; sleep 0.1; done ) &
+( for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8090/; sleep 0.1; done ) &
 sleep 1
-tshark -i lo -f 'tcp port 8080' -b filesize:8 -b files:3 -a duration:8 -w /tmp/lab/ring.pcap
+tshark -i lo -f 'tcp port 8090' -b filesize:8 -b files:3 -a duration:8 -w /tmp/lab/ring.pcap
 ls -la /tmp/lab/ring_*
 ```
 
@@ -187,7 +188,7 @@ ls -la /tmp/lab/ring_*
 ```
 
 ```bash
-tshark -i lo -f 'tcp port 8080' -b duration:2 -b files:2 -a duration:6 -w /tmp/lab/dur.pcap
+tshark -i lo -f 'tcp port 8090' -b duration:2 -b files:2 -a duration:6 -w /tmp/lab/dur.pcap
 ls /tmp/lab/dur_*
 ```
 
@@ -222,7 +223,7 @@ column 3; read the description and type from columns 2 and 4.
 ## 8. Read a scapy-generated pcap (cross-tool)
 
 ```bash
-python3 -c "
+/opt/venvs/scapy/bin/python3 -c "
 from scapy.all import wrpcap, Ether, IP, TCP
 wrpcap('/tmp/lab/crafted.pcap', [Ether()/IP(dst='192.0.2.1')/TCP(dport=443, flags='S')])"
 tshark -r /tmp/lab/crafted.pcap -T fields -e ip.dst -e tcp.flags.syn
