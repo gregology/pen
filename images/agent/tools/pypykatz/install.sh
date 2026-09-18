@@ -17,9 +17,10 @@ verify_output '0.6.13' pypykatz version
 # The `smb` command group is imported inside a try/except in __main__.py, so a
 # broken aiosmb or dependency leaves the subcommand silently absent and visible
 # only as a string on startup. Importing the module directly tests the same
-# code path without going through the CLI, which is what actually loads it.
-verify_output 'smb command group loads' "$PYPYKATZ_VENV/bin/python3" -c \
-    'import pypykatz.commands.smb; print("smb command group loads")'
+# code path without going through the CLI. The module is `pypykatz.smb` —
+# there is no `pypykatz.commands` package, which a first attempt assumed.
+verify_output 'smb module loads' "$PYPYKATZ_VENV/bin/python3" -c \
+    'import pypykatz.smb; print("smb module loads")'
 
 # Deliberately NOT verified with `pypykatz smb client help`: on Python 3.11 that
 # reaches a runtime bug in pypykatz's own argument parsing (SMBCMDArgs has no
