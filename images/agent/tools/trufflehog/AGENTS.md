@@ -55,6 +55,7 @@ Global flags that matter
 |---|---|
 | `-j, --json` | One JSON object per finding (JSONL) on stdout |
 | `--no-verification` | Do not call the issuing API; every result becomes `Verified: false` |
+| `--only-verified` | Keep verified findings only |
 | `--results=` | `verified`, `unknown`, `unverified`, `filtered_unverified`; default `verified,unverified,unknown` |
 | `--fail` | Exit 183 when results are found |
 | `--fail-on-scan-errors` | Exit 1 when the scan hits an error; without it, errors exit 0 |
@@ -64,7 +65,7 @@ Global flags that matter
 | `--filter-unverified` | Keep only the first unverified hit per chunk per detector |
 | `--max-decode-depth=5` | Iterative decoding depth (base64 inside UTF-16, …) |
 | `--sarif`, `--github-actions`, `--json-legacy` | Alternate output formats |
-| `--log-level=-1` | Silence the JSON log lines on stderr |
+| `--log-level=-1` | Silence the JSON log lines on stderr, including the `finished scanning` summary |
 | `--no-update` | Do not check GitHub for a newer release at startup |
 | `--config FILE`, `--verifier=`, `--custom-verifiers-only`, `--detector-timeout=` | Configuration and verification control |
 | `--archive-max-size/depth/timeout` | Limits when scanning archives |
@@ -80,8 +81,8 @@ Source flags (after the subcommand)
 | `-i/--include-paths FILE` | File of newline-separated regexes of paths to include |
 | `-x/--exclude-paths FILE` | File of newline-separated regexes of paths to exclude |
 
-`--only-verified` does **not** exist in 3.97.5 (`unknown long flag
-'--only-verified'`); the equivalent is `--results=verified`.
+`--only-verified` exists in 3.97.5: it is accepted and filters results to
+verified findings only. `--results=verified` is the equivalent long form.
 
 ## Typical workflows
 
@@ -89,7 +90,7 @@ Source flags (after the subcommand)
 
    ```bash
    mkdir -p "$WORK/trufflehog"
-   trufflehog --no-update --no-verification --log-level=-1 --json \
+   trufflehog --no-update --no-verification --json \
        git "file://$WORK/src/project" \
        > "$WORK/trufflehog/project.jsonl" 2> "$WORK/trufflehog/project.log"
    jq -r '"\(.DetectorName)\t\(.Verified)\t\(.SourceMetadata.Data.Git.file)\t\(.SourceMetadata.Data.Git.commit[0:8])"' \
@@ -108,7 +109,7 @@ Source flags (after the subcommand)
 3. **A directory of repositories or an unpacked tree:**
 
    ```bash
-   trufflehog --no-update --no-verification --log-level=-1 --json \
+   trufflehog --no-update --no-verification --json \
        filesystem "$WORK/src" > "$WORK/trufflehog/tree.jsonl"
    ```
 
@@ -224,9 +225,11 @@ tshark -r "$WORK/pcap/http.pcap" -Y http.request -T fields -e http.authorization
   stderr.
 - **`git` needs a URI.** `file:///abs/path` or an `https://`/`ssh://` remote;
   a bare path fails with `error preparing repo: unsupported Git URI: /abs/path`.
-- **`--only-verified` is gone.** Use `--results=verified` (or `--results
-  verified,unknown`). With `--no-verification` every result is unverified, so
-  `--results=verified` returns nothing at all — expected, not a bug.
+- **`--only-verified` works; `--results` is the broader control.** Use
+  `--only-verified` or `--results=verified` for verified findings only, or
+  `--results=verified,unknown` for a wider net. With `--no-verification` every
+  result is unverified, so verified-only flags return nothing at all — expected,
+  not a bug.
 - **Verification is on by default and it calls out.** There is no local-only
   verification. If the network path to a provider is blocked, results come back
   `unknown` rather than verified. Use `--no-verification` deliberately and record
@@ -237,7 +240,7 @@ tshark -r "$WORK/pcap/http.pcap" -Y http.request -T fields -e http.authorization
   URI were all detected. Do not treat an empty JSONL as proof of a clean repo.
 - **`--include-paths`/`--exclude-paths` take files, not patterns.** Each file
   holds newline-separated regexes. A missing file logs
-  `unable to open filter file` and yields nothing (exit 0) — another silent-empty
+  `unable to open filter file` and yields nothing (exit 1) — another silent-empty
   failure mode. `--exclude-globs='*.pem'` (git source only) takes a comma-separated
   glob list; the filesystem source rejects it.
 - **`docker --image` needs no Docker socket** but does need registry egress: it
