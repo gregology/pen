@@ -73,8 +73,6 @@ services:
       # never committed.
       - /home/user/pen/vpn-configs:/vpn/configs:ro
     environment:
-      - VPN_API_TOKEN=${VPN_API_TOKEN}
-      - VPN_API_PORT=8080
       - SANDBOX_CIDR=172.30.0.0/24   # must match the sandbox subnet above
       - EGRESS_CIDR=172.31.0.0/24    # must match the egress subnet above
       - LAN_CIDR=10.0.0.0/24         # household LAN; GUI is reachable from here
@@ -96,10 +94,9 @@ services:
       - "10.0.0.10:3081:3081"
     healthcheck:
       # "Healthy" = kill switch applied and API up (tunnel may still be
-      # connecting; the API reports that in /status). CMD-SHELL because
-      # the token must be expanded in the container — CMD would pass the
-      # literal string "$VPN_API_TOKEN" to curl and 401 forever.
-      test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${VPN_API_TOKEN}\" http://localhost:8080/status"]
+      # connecting; the API reports that in /status). No credential, so
+      # this is a plain request against loopback.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/status"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -133,9 +130,9 @@ services:
       # (e.g. kimi-coding/k3, zai/glm-5.3, gaming-rig/qwen38-27b).
       - OPENAI_BASE_URL=http://llm-proxy:4000/v1
       - OPENAI_API_KEY=${LITELLM_MASTER_KEY}   # proxy key, NOT a provider key
-      # VPN control API — same namespace, so plain localhost.
-      - VPN_API_URL=http://localhost:8080
-      - VPN_API_TOKEN=${VPN_API_TOKEN}
+      # The VPN control API is reached at http://localhost:8080 — fixed, and
+      # baked into the agent image (see ENV VPN_API_URL in the agent
+      # Dockerfile). Nothing to configure here.
       # code-server login. Unset means code-server generates one into
       # /home/user/pen/dsh-data/code-server/config.yaml.
       - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD}
