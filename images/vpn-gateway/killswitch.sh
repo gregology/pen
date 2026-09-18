@@ -7,7 +7,10 @@ set -eu
 : "${EGRESS_CIDR:?required}"
 : "${LAN_CIDR:?required}"
 : "${DNS_SERVERS:?required}"
-API_PORT="${VPN_API_PORT:-8080}"
+# Fixed, not configurable: the API binds this exact port and the agent image
+# bakes in the matching URL. A variable here could disagree with both and
+# silently drop the agent's own control traffic.
+API_PORT=8080
 
 iptables -F
 iptables -P INPUT ACCEPT

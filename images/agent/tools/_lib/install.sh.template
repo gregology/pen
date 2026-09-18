@@ -1,0 +1,10 @@
+#!/bin/bash
+# tools/<NAME>/install.sh — version pin, install, and verification for <NAME>.
+set -eux -o pipefail
+
+. /tmp/tool-install-helpers.sh
+
+<NAME>_VERSION=CHANGEME
+
+apt_install <NAME>
+"<NAME>" --version

@@ -98,7 +98,8 @@ The security-critical component; build and test it first, alone.
   tunnel healthy. The route is asserted *via* the gateway rather than left
   on-link so the namespace never ARPs for an off-subnet client: the bridge
   does not proxy ARP, so an on-link lookup dead-ends in `INCOMPLETE`
-  neighbour entries. Endpoints, authenticated by a shared bearer token:
+  neighbour entries. Endpoints (no credential — the kill switch limits the
+  port to the sandbox network and loopback):
   - `GET /status` → current node, tunnel state, handshake age, counters.
   - `GET /nodes` → config names found in `/vpn/configs`.
   - `POST /switch {"node": "<name>"}` → replace endpoint exception,
@@ -112,7 +113,7 @@ The security-critical component; build and test it first, alone.
   :3080 to it (the ports must differ — a wildcard :3080 forwarder would
   collide with any loopback :3080 listener). The kill switch scopes
   :3080 to host and sandbox traffic.
-- Healthcheck: `curl -f http://localhost:8080/status` (tokened). The
+- Healthcheck: `curl -f http://localhost:8080/status`. The
   agent's `depends_on: service_healthy` means the agent never starts
   before the kill switch is live.
 
@@ -162,8 +163,10 @@ The security-critical component; build and test it first, alone.
   symlinked from `fdfind` for the same reason `fdfind` is the packaged
   name). `pip install` needs a venv — the system Python is externally
   managed.
-- **The pentest toolchain on top of the base** (reasoning in
-  `TOOLSET-RESEARCH.md`, per-tool usage in `tools/`):
+- **The pentest toolchain on top of the base.** Each tool owns a directory
+  under `images/agent/tools/<name>/` holding its `install.sh` (version pins and
+  install) and its `AGENTS.md` (operator usage); the selection rationale is in
+  `images/agent/tools/TOOL_RESEARCHING.md`. Versions:
   - **reconnaissance** — nuclei 3.11.1 (with nuclei-templates 10.4.9 baked
     to `/root/nuclei-templates`), httpx 1.12.0, katana 1.7.0,
     subfinder 2.16.0, dnsx 1.3.1, naabu 2.6.1
@@ -249,9 +252,11 @@ The security-critical component; build and test it first, alone.
 3. Create the stack via the Portainer API (repository endpoint, env 16)
    or the UI, compose path `docker-compose.yml`.
 4. Set stack environment variables in Portainer:
-   `VPN_API_TOKEN`, `LITELLM_MASTER_KEY`, `KIMI_CODING_API_KEY`,
+   `LITELLM_MASTER_KEY`, `KIMI_CODING_API_KEY`,
    `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `GAMING_RIG_API_KEY`,
    `CODE_SERVER_PASSWORD` (new; generate one).
+   There is no `VPN_API_TOKEN`: the control API is unauthenticated and
+   confined to the sandbox network and loopback by the kill switch.
 5. Deploy. Note: this Portainer version records the stack with
    `GitConfig: null`, so later compose changes are applied by PUT-ing the
    whole file back (preserving Env), not by "pull and redeploy".
@@ -305,14 +310,14 @@ form of each test damages the platform rather than testing it:
   through `POST /switch` (which does a full down-then-up) rather than by
   toggling the link.
 
-- **A blank `VPN_API_TOKEN` makes the control API accept an empty bearer.**
-  Observed while recreating the stack with an env that resolved blank: the
-  handler compares against its own token, so an empty value matches an empty
-  header. The publish path cannot produce this (the token is supplied per
-  deploy), but any procedure that recreates the gateway outside Portainer
-  must carry the existing environment forward or the API briefly becomes
-  unauthenticated to everything on the sandbox network. Verify with
-  `no-auth=401` after any gateway recreate.
+- **The control API carries no credential, by design.** It was formerly
+  authenticated by a shared bearer token, which was removed: the token was
+  never the boundary (the kill switch restricts port 8080 to the sandbox
+  network and loopback) and a blank `VPN_API_TOKEN` in the stack environment
+  made the agent's own calls fail with a 401. Confirm the API answers with
+  `curl -fsS http://localhost:8080/status` from inside the namespace, and
+  confirm the boundary still holds by checking that the same request from the
+  egress network is dropped.
 
 Results: leak test 10/10 blocked with zero home-IP answers; attribution via
 an Adelaide exit (`103.214.20.198`) distinct from the home line; rotation to

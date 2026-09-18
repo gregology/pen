@@ -6,9 +6,13 @@ nowhere else — one code path, so the kill switch invariants only have to
 be reasoned about once. The kill switch itself is applied by
 entrypoint.sh before this process starts, so a tunnel failure can never
 open egress; it can only leave the namespace dark.
+
+The API is unauthenticated. Access control is the kill switch's job: it
+answers port 8080 from the sandbox network and loopback and drops it from
+everywhere else, so the only client that can reach it is the agent, which
+shares this network namespace.
 """
 
-import hmac
 import json
 import os
 import re
@@ -24,8 +28,11 @@ ACTIVE_CONF = "/run/wg0.conf"
 IFACE = "wg0"
 ENDPOINT_COMMENT = "pen-endpoint"
 
-TOKEN = os.environ["VPN_API_TOKEN"]
-PORT = int(os.environ.get("VPN_API_PORT", "8080"))
+# Fixed, not configurable: the kill switch opens this exact port to the
+# sandbox network and drops it everywhere else, and the agent's URL for it
+# is baked into the agent image. A variable here could disagree with both.
+# Changing the port means changing killswitch.sh and the agent image together.
+PORT = 8080
 LAN_CIDR = os.environ["LAN_CIDR"]
 # wg-quick claims rule priorities just ahead of whatever already exists,
 # so the LAN rule can only win by being (re)asserted after each tunnel
@@ -177,11 +184,12 @@ def tunnel_status():
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def authorized(self):
-        expected = f"Bearer {TOKEN}"
-        header = self.headers.get("Authorization", "")
-        return hmac.compare_digest(header.encode(), expected.encode())
-
+    # No authentication. The API is reachable only from the sandbox network
+    # and loopback — the kill switch drops port 8080 from everywhere else,
+    # including the tunnel — and the only client is the agent, which shares
+    # this network namespace. A shared bearer token added nothing to that
+    # and introduced a way to lose access: a blank VPN_API_TOKEN in the
+    # stack environment made the agent's own calls fail.
     def reply(self, code, body):
         payload = json.dumps(body).encode()
         self.send_response(code)
@@ -191,8 +199,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):
-        if not self.authorized():
-            return self.reply(401, {"error": "unauthorized"})
         if self.path == "/status":
             return self.reply(200, tunnel_status())
         if self.path == "/nodes":
@@ -200,8 +206,6 @@ class Handler(BaseHTTPRequestHandler):
         return self.reply(404, {"error": "not found"})
 
     def do_POST(self):
-        if not self.authorized():
-            return self.reply(401, {"error": "unauthorized"})
         if self.path != "/switch":
             return self.reply(404, {"error": "not found"})
         try:
