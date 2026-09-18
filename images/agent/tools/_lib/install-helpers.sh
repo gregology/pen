@@ -73,16 +73,16 @@ install_bins() {
     done
 }
 
-# Expose a virtualenv's console scripts on PATH. Symlinking the scripts is
-# what keeps a tool usable without activating anything: each script's
-# shebang is an absolute path into its own venv, so the tool always runs
-# under the interpreter its packages were resolved for.
+# Expose a virtualenv's console scripts on PATH. Symlinking the scripts is what
+# keeps a tool usable without activating anything: each script's shebang is an
+# absolute path into its own venv, so the tool always runs under the interpreter
+# its packages were resolved for.
 #
 # Names after the venv are left unlinked. A Python distribution can ship a
-# console script that collides with a different tool's binary — the httpx
-# HTTP client against ProjectDiscovery's httpx is the known case, and the
-# loser is whichever gets linked last. The intended owner is always declared
-# here, never decided by install order.
+# console script that collides with a different tool's binary, and the loser is
+# whichever gets linked last — so the intended owner is always declared here,
+# never decided by install order. Use this for a venv that contains little but
+# the tool itself; use `expose_venv_only` when the dependency tree is large.
 expose_venv() {
     local venv="$1"; shift
     local skip="$*"
@@ -97,5 +97,33 @@ expose_venv() {
             *" $name "*) say "expose_venv: leaving $name to its intended owner"; continue ;;
         esac
         ln -sf "$script" /usr/local/bin/
+    done
+}
+
+# Expose only the named console scripts from a virtualenv.
+#
+# `expose_venv` links everything the venv provides, which is right for a tool
+# whose venv contains little else. It is wrong for a tool with a large
+# dependency tree: netexec's venv carries 134 console scripts, including
+# utility binaries (flask, pygmentize, tabulate, tqdm), other tools' packages
+# (httpx, pypykatz, certipy, dploot) and a second copy of impacket's example
+# scripts. Linking all of that both clutters PATH and silently rebinds names
+# another tool owns — and since install order decides the winner, the loser is
+# whichever tool happens to be installed first.
+#
+# When a tool's venv is not self-contained, name what the agent should be able
+# to type. Usage:
+#
+#   expose_venv_only "$NETEXEC_VENV" nxc netexec nxcdb
+expose_venv_only() {
+    local venv="$1"; shift
+    "$venv/bin/python3" -m pip check
+    local name
+    for name in "$@"; do
+        if [ ! -e "$venv/bin/$name" ]; then
+            echo "expose_venv_only: $venv/bin/$name does not exist" >&2
+            return 1
+        fi
+        ln -sf "$venv/bin/$name" /usr/local/bin/
     done
 }

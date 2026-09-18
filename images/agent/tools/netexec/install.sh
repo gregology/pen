@@ -24,14 +24,19 @@ python3 -m venv "$NETEXEC_VENV"
     "aardwolf<0.2.14" \
     "git+https://github.com/Pennyw0rth/NetExec@${NETEXEC_VERSION}"
 
-# `httpx` is skipped: netexec's dependency tree includes the Python httpx
-# library, whose console script lands in /usr/local/bin and shadows
-# ProjectDiscovery's httpx *binary* — a different program with the same name.
-# Without this the agent's `httpx` becomes a Python HTTP client that rejects
-# `-version` and every ProjectDiscovery flag. Verified on host01: the symlink
-# pointed at /opt/venvs/netexec/bin/httpx and `httpx -version` printed
-# "Usage: httpx [OPTIONS] URL". ProjectDiscovery's binary owns that name.
-expose_venv "$NETEXEC_VENV" httpx
+# Allowlist, not skip list. netexec's venv provides 134 console scripts: its own
+# two wrappers plus everything its dependency tree drags in — utility binaries
+# (flask, tabulate, tqdm, pygmentize), other tools' packages (httpx, pypykatz,
+# certipy, dploot), and a second copy of impacket's example scripts. Exporting
+# all of it would both clutter PATH and silently rebind names other tools own,
+# with install order deciding the winner.
+#
+# Verified on host01 before this fix: /usr/local/bin/httpx pointed at
+# /opt/venvs/netexec/bin/httpx, so the agent's `httpx` was a Python HTTP client
+# that rejected `-version`; and secretsdump.py resolved to netexec's impacket
+# 0.14.0.dev0 while the impacket tool installs 0.13.1, so the documented version
+# was not the one that ran.
+expose_venv_only "$NETEXEC_VENV" nxc netexec nxcdb
 test -x /usr/local/bin/nxc
 "$NETEXEC_VENV/bin/pip" check
 verify_output '1.5.1' nxc --version
