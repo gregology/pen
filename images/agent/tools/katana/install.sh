@@ -24,4 +24,4 @@ install_bins /tmp/unpack katana
 rm -f /tmp/katana.zip
 rm -rf /tmp/unpack
 
-verify_output 'katana' katana -version
+verify_output '1.7.0' katana -version

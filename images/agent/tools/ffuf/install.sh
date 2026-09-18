@@ -14,4 +14,4 @@ install_bins /tmp/unpack ffuf
 rm -f /tmp/ffuf.tar.gz
 rm -rf /tmp/unpack
 
-verify_output 'ffuf' ffuf -V
+verify_output '2.3.0' ffuf -V

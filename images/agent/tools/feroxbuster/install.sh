@@ -14,4 +14,4 @@ install_bins /tmp/unpack feroxbuster
 rm -f /tmp/feroxbuster.zip
 rm -rf /tmp/unpack
 
-verify_output 'feroxbuster' feroxbuster --version
+verify_output '2.13.1' feroxbuster --version

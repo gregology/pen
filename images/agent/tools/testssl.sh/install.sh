@@ -19,4 +19,4 @@ chmod +x /opt/testssl.sh/testssl.sh
 ln -s /opt/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 rm -f /tmp/testssl.tar.gz
 
-verify_output 'testssl' testssl.sh --version
+verify_output '3.2.4' testssl.sh --version

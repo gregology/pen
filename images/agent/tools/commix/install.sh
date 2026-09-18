@@ -24,4 +24,4 @@ rm -f /tmp/commix.tar.gz
 python3 -c "import ast; ast.parse(open('/opt/commix/commix.py').read())"
 
 # `--version` prints and exits without needing a target. Verified against 4.1.
-verify_output 'commix' commix --version
+verify_output 'v4.1' commix --version

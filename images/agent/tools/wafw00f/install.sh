@@ -13,4 +13,4 @@ python3 -m venv "$WAFFW00F_VENV"
 "$WAFFW00F_VENV/bin/pip" install --no-cache-dir "wafw00f==${WAFFW00F_VERSION}"
 
 expose_venv "$WAFFW00F_VENV"
-verify_output 'wafw00f' wafw00f --version
+verify_output '2.4.2' wafw00f --version

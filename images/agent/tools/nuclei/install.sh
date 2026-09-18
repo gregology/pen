@@ -27,4 +27,4 @@ rm /tmp/nuclei-templates.tar.gz /tmp/nuclei.zip
 rm -rf /tmp/unpack
 
 test "$(find /root/nuclei-templates -name '*.yaml' | wc -l)" -gt 1000
-verify_output 'nuclei' nuclei -version
+verify_output '3.11.1' nuclei -version

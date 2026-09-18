@@ -14,4 +14,4 @@ install_bins /tmp/unpack dnsx
 rm -f /tmp/dnsx.zip
 rm -rf /tmp/unpack
 
-verify_output 'dnsx' dnsx -version
+verify_output '1.3.1' dnsx -version

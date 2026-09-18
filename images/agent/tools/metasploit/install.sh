@@ -27,4 +27,4 @@ rm -rf /var/lib/apt/lists/*
 
 # msfconsole is the entry point; the image pins the package, not a version,
 # because upstream publishes only a rolling apt repository.
-verify_output 'metasploit' msfconsole --version
+verify_output '6.5' msfconsole --version

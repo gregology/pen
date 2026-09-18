@@ -7,4 +7,4 @@ set -eux -o pipefail
 # bookworm's tshark is current; apt is the cheaper path than a source build.
 apt_install tshark
 
-verify_output 'TShark' tshark --version
+verify_output '4.0.17' tshark --version
