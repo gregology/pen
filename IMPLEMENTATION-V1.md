@@ -162,8 +162,10 @@ The security-critical component; build and test it first, alone.
   symlinked from `fdfind` for the same reason `fdfind` is the packaged
   name). `pip install` needs a venv — the system Python is externally
   managed.
-- **The pentest toolchain on top of the base** (reasoning in
-  `TOOLSET-RESEARCH.md`, per-tool usage in `tools/`):
+- **The pentest toolchain on top of the base.** Each tool owns a directory
+  under `images/agent/tools/<name>/` holding its `install.sh` (version pins and
+  install) and its `AGENTS.md` (operator usage); the selection rationale is in
+  `images/agent/tools/TOOL_RESEARCHING.md`. Versions:
   - **reconnaissance** — nuclei 3.11.1 (with nuclei-templates 10.4.9 baked
     to `/root/nuclei-templates`), httpx 1.12.0, katana 1.7.0,
     subfinder 2.16.0, dnsx 1.3.1, naabu 2.6.1
