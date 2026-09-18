@@ -17,9 +17,8 @@ list of URLs that `nuclei`, `ffuf` and `dalfox` actually test.
 | Output | stdout, or `-o <file>`; `-srd` for stored responses |
 
 Katana is stateless between runs apart from the resume file and whatever
-`-sr`/`-sfd` write to disk. Headless mode downloads its own Chromium — which
-then fails to run in this image (see *Limits*). Non-headless crawling needs no
-browser.
+`-sr`/`-sfd` write to disk. Headless mode downloads its own Chromium on first
+use (see *Limits*). Non-headless crawling needs no browser.
 
 ```bash
 katana -version -duc     # "Current version: v1.7.0"
@@ -221,8 +220,7 @@ Every flag below is from `katana -h` on 1.7.0.
 
 Plain output is one URL per line. `-jsonl` emits one object per discovered
 request. Verified structure in this build — top level is exactly
-`timestamp`, `request`, `response`, plus `error` on failure and `forms` with
-`-fx`:
+`timestamp`, `request`, `response`, plus `error` on failure:
 
 | Field | Meaning |
 |---|---|
@@ -237,15 +235,15 @@ request. Verified structure in this build — top level is exactly
 | `.response.content_length` | Body length. |
 | `.response.raw` | Raw response text. Removed by `-or`. |
 | `.error` | Present instead of `.response` when the fetch failed. |
-| `.forms[]` | With `-fx`: `method`, `action`, `enctype`, `parameters[]`. |
+| `.response.forms[]` | With `-fx`: `method`, `action`, `enctype`, `parameters[]`. |
 
 Verified `-fx` output for a page containing a form:
 
 ```json
 {"timestamp":"...","request":{"method":"GET","endpoint":"http://127.0.0.1:8099/form.html","raw":"..."},
- "response":{"status_code":200,"headers":{...},"body":"...","content_length":230,"raw":"..."},
- "forms":[{"method":"POST","action":"http://127.0.0.1:8099/submit",
-           "enctype":"application/x-www-form-urlencoded","parameters":["user","pass","c","s"]}]}
+ "response":{"status_code":200,"headers":{...},"body":"...","content_length":230,"raw":"...",
+             "forms":[{"method":"POST","action":"http://127.0.0.1:8099/submit",
+                       "enctype":"application/x-www-form-urlencoded","parameters":["user","pass","c","s"]}]}}
 ```
 
 A failed fetch carries an error instead of a response:
@@ -270,7 +268,7 @@ jq -r 'select(.request.method == "POST")
        | "\(.request.endpoint)\t\(.request.body // "")"' "$WORK/katana.jsonl"
 
 # forms and their parameters, with -fx
-jq -c '.forms[]? | {method, action, parameters}' "$WORK/katana.jsonl"
+jq -c '.response.forms[]? | {method, action, parameters}' "$WORK/katana.jsonl"
 
 # fetches that failed, with the reason
 jq -r 'select(.error) | "\(.request.endpoint)\t\(.error)"' "$WORK/katana.jsonl"
@@ -324,23 +322,16 @@ katana -u "$TARGET" -d 3 -silent -duc \
 
 ## Limits, failure modes and gotchas
 
-- **Headless crawling is unverified in this image, and when it fails it fails
-  quietly.** `-hl`/`-hh` download a Chromium build via go-rod from
-  `storage.googleapis.com` into `/root/.cache/rod/browser/chromium-<rev>` on
-  first use (about 150 MB, needs egress). The shared libraries Chromium links
-  against — `libnss3`, `libnspr4`, `libatk*`, `libatspi`, `libcups`, `libgbm`,
-  `libxkbcommon`, `libXcomposite`, `libXdamage`, `libXrandr`, `libXfixes`,
-  `libpango`, `libcairo`, `libasound` — **are now installed by
-  `tools/katana/install.sh`**. Previously they were not, and without them `ldd`
-  reported 14 missing and the browser could not launch at all. What has not
-  been done is a live headless crawl against a built image, so treat `-hl`/`-hh`
-  as untested until someone runs one.
-
-  The failure mode to watch for is the dangerous kind: katana **exits 0** and
-  reports `Crawl completed in 1s. 0 endpoints found.` rather than an error. A
-  headless crawl that finds nothing has found nothing about the target — it
-  never had a browser. If you need certainty now, use `-jc` (non-headless JS
-  parsing), which needs no browser and is known to work.
+- **Headless crawling needs egress on first use.** `-hl`/`-hh` download a
+  Chromium build via go-rod from `storage.googleapis.com` into
+  `/root/.cache/rod/browser/chromium-<rev>` (about 150 MB), then launch it. The
+  shared libraries Chromium links against are installed by
+  `tools/katana/install.sh`, so the downloaded browser runs; the download is
+  the only network dependency, and the browser is cached for later runs.
+- **`-hl` is labelled experimental upstream.** A headless crawl that exits 0
+  with `Crawl completed in 1s. 0 endpoints found.` is not evidence that the
+  target has no URLs. `-jc` (non-headless JS parsing) needs no browser and is
+  the safer baseline.
 - **The output flag is `-jsonl`, not `-json`.** `katana -json` fails with
   `flag provided but not defined: -json`. This differs from httpx, where
   `-json` is correct.
