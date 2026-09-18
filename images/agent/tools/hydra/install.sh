@@ -7,15 +7,14 @@ set -eux -o pipefail
 apt_install hydra
 
 # `hydra -h` prints its banner and then exits 255 — hydra's own choice, not a
-# failure, but `set -o pipefail` propagates it through the pipeline and `set -e`
-# would abort on it. Suspend both, then gate on the grep: a missing banner must
-# still fail the build, so acceptance is the grep's exit status, not the
-# pipeline's. (Piping straight into `head` was worse — SIGPIPE as well.)
-set +e
-hydra -h 2>&1 | grep -m1 'Hydra v'
-HYDRA_BANNER=$?
-set -e
-if [ "$HYDRA_BANNER" -ne 0 ]; then
+# failure. Two shell hazards to avoid here, both of which silently broke this
+# check on a real build: piping into `head` gives hydra SIGPIPE, and with
+# `set -o pipefail` even a matching `grep` reports the pipeline's status as
+# hydra's, so `$?` cannot be used as the match result. Capture, then grep the
+# captured text — the grep's own exit status is the reliable signal.
+hydra -h > /tmp/hydra-help.txt 2>&1 || true
+if ! grep -q 'Hydra v' /tmp/hydra-help.txt; then
     echo "hydra did not print its banner" >&2
     exit 1
 fi
+rm -f /tmp/hydra-help.txt
