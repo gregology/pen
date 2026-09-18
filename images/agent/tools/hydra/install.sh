@@ -6,4 +6,7 @@ set -eux -o pipefail
 
 apt_install hydra
 
-hydra -h 2>&1 | head -1
+# Capture before truncating: piping straight into `head` closes the pipe early,
+# the tool dies on SIGPIPE, and `set -o pipefail` reports that as the build's
+# exit status even though the tool works.
+hydra -h 2>&1 | grep -m1 'Hydra v'
