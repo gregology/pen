@@ -59,7 +59,7 @@ answers?"), and feroxbuster for "map the whole tree".
 | `-enc 'FUZZ:urlencode b64encode'` | Encoders applied to a keyword |
 | `-D` | DirSearch wordlist compatibility mode (use with `-e`) |
 | `-ic` | Ignore wordlist comment lines |
-| `-input-cmd 'cmd'` / `-input-num N` | Generate inputs from a command instead of a wordlist |
+| `-input-cmd 'cmd'` / `-input-num N` | Take inputs from a command's stdout. Does not line-split it — use `-w -` for a list of inputs |
 | `-http2`, `-raw`, `-ignore-body`, `-sni name` | Transport/response handling |
 
 ### Matchers (what to report) and filters (what to drop)
@@ -254,9 +254,9 @@ jq -r '.results[].url' $WORK/dirs.json | feroxbuster --stdin -q -w $WORDLISTS/Di
   Parsers that work on one break on the other.
 - **`-request` defaults to HTTPS.** A raw request for an HTTP target needs
   `-request-proto http`, or ffuf fails to connect.
-- **Exit code is not a success signal.** Verified: a missing wordlist
-  (`stat /nonexistent.txt: no such file or directory`) and a run that matched
-  nothing both exited `0`. Parse the JSON, do not test `$?`.
+- **Exit code is not a success signal.** Verified: a run that matched nothing
+  exits `0`, and a missing wordlist (`stat /nonexistent.txt: no such file or
+  directory`) exits `1`. Parse the JSON, do not test `$?`.
 - **No retry/backoff.** ffuf does not honour `Retry-After` or retry `429`s.
   `-rate`/`-p` are the only brakes; `-sf`/`-se`/`-sa` only stop the run.
 - **Output file is created even when empty** unless `-or` is given.
