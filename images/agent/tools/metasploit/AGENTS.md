@@ -620,11 +620,12 @@ JSON API. It also self-backgrounds, so `kill $!` does not stop it.
   run (verified: 2 lines from `msfdb`, 0 from `msfconsole` and `msfvenom`).
   Cosmetic; discard stderr.
 - **Missing external tools.** Present: `nmap` (7.93, used by `db_nmap`), `gcc`,
-  `make`, `python3` (venv), `sqlmap`, `nc`, `tcpdump`, `curl`, `openssl`, `git`,
-  `ping`, `od`. **Absent**: `nasm`, `java`, `xxd`, `hexdump` — use `od -An -v
-  -tx1` for byte inspection, and expect modules that need an assembler or a JVM
-  to fail at run time rather than at startup (**unverified** which modules
-  fail; only the absence of the binaries was verified).
+  `make`, `python3` (venv), `sqlmap`, `nc`, `curl`, `openssl`, `git`, `ping`,
+  `od`, `hexdump` (`/usr/bin/hexdump`). **Absent**: `nasm`, `java`, `xxd` — use
+  `od -An -v -tx1` for byte inspection, and expect modules that need an
+  assembler or a JVM to fail at run time rather than at startup
+  (**unverified** which modules fail; only the absence of the binaries was
+  verified).
 - **No login-shell assumptions.** The `/usr/bin` entry points are
   update-alternatives symlinks and the wrappers fix up `PATH`/`GEM_*`
   themselves; `/etc/profile.d` is empty. `docker exec … bash -c 'msfconsole …'`
