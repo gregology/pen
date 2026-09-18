@@ -180,9 +180,9 @@ including match locations), `--log-sql` (`--log-sql-create` writes the schema),
 - **Aggression 4 is a crawl.** Against a large site it can be thousands of
   requests and is easily mistaken for an attack.
 - **`--log-*` files are written with append semantics** — running the same
-  command twice appends a second JSON document to the file, producing invalid
-  JSON. Delete the file or use a fresh name between runs. This one silently
-  breaks any downstream `jq`.
+  command twice appends a second JSON array to the same file, so `jq` emits one
+  result per array (`jq 'length'` prints two lines) and per-run counts and
+  selects silently mix runs. Delete the file or use a fresh name between runs.
 
 ## Notes
 

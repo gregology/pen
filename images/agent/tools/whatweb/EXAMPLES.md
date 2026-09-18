@@ -153,5 +153,5 @@ engagement only, without writing a Ruby plugin.
 whatweb's version, the aggression level and the thread count belong in the note:
 the same command at aggression 4 against the same host produces a different,
 larger result set, and a reader cannot tell which one you ran from the output
-alone. Fresh filename per run — `--log-json` appends, so reusing one produces a
-file that `jq` cannot parse.
+alone. Fresh filename per run — `--log-json` appends, so reusing one mixes two
+runs in the same JSON stream.
