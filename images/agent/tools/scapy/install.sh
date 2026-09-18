@@ -22,4 +22,4 @@ EOF
 chmod +x /usr/local/bin/scapy
 
 expose_venv "$SCAPY_VENV"
-scapy -c 'from scapy.all import conf; print("scapy", conf.version)'
+verify_output 'scapy' scapy -c 'from scapy.all import conf; print("scapy", conf.version)'

@@ -6,4 +6,4 @@ set -eux -o pipefail
 
 apt_install sqlmap
 
-sqlmap --version
+verify_output 'sqlmap' sqlmap --version

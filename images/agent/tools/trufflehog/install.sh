@@ -14,4 +14,4 @@ install_bins /tmp/unpack trufflehog
 rm -f /tmp/trufflehog.tar.gz
 rm -rf /tmp/unpack
 
-trufflehog --version
+verify_output 'trufflehog' trufflehog --version

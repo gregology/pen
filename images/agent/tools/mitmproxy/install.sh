@@ -22,4 +22,4 @@ python3 -m venv "$MITMPROXY_VENV"
 
 expose_venv "$MITMPROXY_VENV"
 test -x /usr/local/bin/mitmdump
-mitmdump --version
+verify_output 'mitmproxy' mitmdump --version

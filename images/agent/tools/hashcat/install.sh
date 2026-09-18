@@ -9,4 +9,4 @@ set -eux -o pipefail
 # hashcat aborts with no ICD even for pure CPU work.
 apt_install hashcat ocl-icd-libopencl1 pocl-opencl-icd
 
-hashcat --version
+verify_output 'hashcat' hashcat --version

@@ -27,4 +27,4 @@ python3 -m venv "$NETEXEC_VENV"
 expose_venv "$NETEXEC_VENV"
 test -x /usr/local/bin/nxc
 "$NETEXEC_VENV/bin/pip" check
-nxc --version
+verify_output '1.5.1' nxc --version

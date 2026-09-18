@@ -14,4 +14,4 @@ install_bins /tmp/unpack naabu
 rm -f /tmp/naabu.zip
 rm -rf /tmp/unpack
 
-naabu -version
+verify_output 'naabu' naabu -version

@@ -9,4 +9,4 @@ set -eux -o pipefail
 # exist here, and the package omits upstream's plugins-disabled/ directory.
 apt_install whatweb
 
-whatweb --version
+verify_output 'whatweb' whatweb --version

@@ -14,5 +14,5 @@ python3 -m venv "$ARJUN_VENV"
 "$ARJUN_VENV/bin/pip" install --no-cache-dir "arjun==${ARJUN_VERSION}"
 
 expose_venv "$ARJUN_VENV"
-arjun --help >/dev/null
+verify_output 'usage: arjun' arjun --help
 test -s "$ARJUN_VENV"/lib/python*/site-packages/arjun/db/large.txt

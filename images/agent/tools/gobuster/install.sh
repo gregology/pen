@@ -10,4 +10,4 @@ set -eux -o pipefail
 # against `gobuster <mode> --help` before documenting a version bump.
 apt_install gobuster
 
-gobuster version
+verify_output 'gobuster' gobuster version

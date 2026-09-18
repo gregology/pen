@@ -15,4 +15,4 @@ apt-get install -y --no-install-recommends /tmp/trivy.deb
 rm -f /tmp/trivy.deb
 rm -rf /var/lib/apt/lists/*
 
-trivy --version
+verify_output 'trivy' trivy --version

@@ -19,5 +19,5 @@ expose_venv "$IMPACKET_VENV"
 # not with an `impacket-` prefix. Check the name that actually gets installed.
 test -x /usr/local/bin/secretsdump.py
 # The package exposes no `impacket.__version__`; ask the installed metadata.
-"$IMPACKET_VENV/bin/python3" -c \
+verify_output 'impacket' "$IMPACKET_VENV/bin/python3" -c \
     'from importlib.metadata import version; print("impacket", version("impacket"))'

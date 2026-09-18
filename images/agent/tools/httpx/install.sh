@@ -14,4 +14,4 @@ install_bins /tmp/unpack httpx
 rm -f /tmp/httpx.zip
 rm -rf /tmp/unpack
 
-httpx -version
+verify_output 'httpx' httpx -version

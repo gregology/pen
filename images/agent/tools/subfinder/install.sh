@@ -14,4 +14,4 @@ install_bins /tmp/unpack subfinder
 rm -f /tmp/subfinder.zip
 rm -rf /tmp/unpack
 
-subfinder -version
+verify_output 'subfinder' subfinder -version

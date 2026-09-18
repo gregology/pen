@@ -12,7 +12,7 @@ python3 -m venv "$PYPYKATZ_VENV"
 "$PYPYKATZ_VENV/bin/pip" install --no-cache-dir "pypykatz==${PYPYKATZ_VERSION}"
 
 expose_venv "$PYPYKATZ_VENV"
-pypykatz version
+verify_output 'pypykatz' pypykatz version
 
 # The `smb` command group is imported inside a try/except in __main__.py, so a
 # broken aiosmb or dependency leaves the subcommand silently absent and visible
