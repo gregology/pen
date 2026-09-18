@@ -201,6 +201,15 @@ RUN npm install -g @deepseek-ai/dsh@0.1.5-rc.1
 # GUI persists across rebuilds; the shared working directory is where
 # test notes and AGENTS.md live, visible to both Greg and the agent.
 ENV DSH_HOME=/data/dsh
+
+# The VPN gateway's control API. Baked in rather than injected from the
+# stack environment: the agent shares the gateway's network namespace, so
+# the address is always loopback on a fixed port, and the kill switch
+# opens exactly that port to the sandbox network and drops it everywhere
+# else. There is no credential — reachability is the control. See
+# images/vpn-gateway/api.py.
+ENV VPN_API_URL=http://localhost:8080
+
 WORKDIR /working
 
 COPY settings.seed.yaml /app/settings.seed.yaml
