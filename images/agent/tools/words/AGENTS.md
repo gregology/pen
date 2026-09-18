@@ -16,7 +16,10 @@ being re-downloaded per engagement.
 | Checksum | none published upstream — the version tag is the pin |
 
 Always reference `/opt/wordlists/current`, never the versioned directory: a
-future bump moves the symlink and leaves every documented command working.
+future bump moves the symlink and leaves every documented command working. The
+tag is the build-time pin recorded in `install.sh`; the tree is a plain extracted
+copy with no version marker, so the tag is not verifiable from the running
+container.
 
 ## Paths that matter
 
@@ -25,7 +28,7 @@ future bump moves the symlink and leaves every documented command working.
 | Path | Shape |
 |---|---|
 | `Discovery/Web-Content/common.txt` | ~4.6k words; the standard first pass |
-| `Discovery/Web-Content/raft-small-words.txt` | short list, fast triage |
+| `Discovery/Web-Content/raft-small-words.txt` | 43,007 words; small only against the rest of the raft set |
 | `Discovery/Web-Content/raft-medium-directories.txt` | ~30k directory-shaped words |
 | `Discovery/Web-Content/raft-large-directories.txt` | the big directory list |
 | `Discovery/Web-Content/raft-medium-files.txt` | file-shaped, with extensions |
@@ -54,7 +57,7 @@ use; `Passwords/Leaked-Databases/rockyou-NN.txt` are percentage samples),
 **Payloads**
 
 `Fuzzing/command-injection-commix.txt`, `Fuzzing/XSS/`, `Fuzzing/LFI/`,
-`Fuzzing/SQLi/`.
+`Fuzzing/Databases/`.
 
 ## The rename that breaks copied commands
 
@@ -78,7 +81,7 @@ ls /opt/wordlists/current/Discovery/Web-Content/ | grep -i dirbuster
 ```bash
 test -s /opt/wordlists/current/Discovery/Web-Content/common.txt
 test -d /opt/wordlists/current/Discovery/DNS
-ls -l /opt/wordlists/current          # should be a symlink to SecLists-2026.1
+ls -l /opt/wordlists/current          # -> /opt/wordlists/SecLists
 ```
 
 Both checks run at the end of `install.sh`, so a build that produces an empty or
@@ -96,5 +99,5 @@ missing.
 - **rockyou is shipped compressed.** Extract it into `$WORK`, not into
   `/opt/wordlists`, so a 133 MB file is not duplicated into the image layer at
   runtime.
-- SecLists is large. If disk pressure appears, check `du -sh
+- SecLists is large. If disk pressure appears, check `du -shL
   /opt/wordlists/current` before assuming a scan is at fault.
