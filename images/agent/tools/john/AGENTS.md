@@ -24,7 +24,7 @@ cracking.
 | Helpers | `/usr/sbin/unshadow`, `/usr/sbin/unique`, `/usr/sbin/unafs`, `/usr/sbin/mailer` |
 | Pot file | `/root/.john/john.pot` |
 | Log | `/root/.john/john.log` |
-| Session files | `./<session>.rec` and `./<session>.log` — **in the current working directory** |
+| Session files | Named `--session=NAME`: `./NAME.rec` + `./NAME.log` **in the current working directory**. Unnamed/default session: `/root/.john/john.rec` + `/root/.john/john.log` |
 
 Supported `--format` names in this build: `descrypt`, `bsdicrypt`, `md5crypt`,
 `bcrypt`, `LM`, `AFS`, `tripcode`, `dummy`, `crypt`. `crypt` is generic
@@ -47,9 +47,11 @@ Supported `--format` names in this build: `descrypt`, `bsdicrypt`, `md5crypt`,
    cost, and get confirmation before starting. 16 threads at 100% also starve
    any authorized scan running in parallel — use `--fork=4` (or `--node=`) to
    cap john.
-5. **Run john from the directory that holds its session file.** `--restore`
-   and `--status` look for `./<session>.rec` in the *current* directory; a
-   different cwd silently loses the session.
+5. **Named sessions belong to the directory that created them.** `--session=NAME`
+   writes `./NAME.rec` and `./NAME.log` in the *current* directory, and
+   `--restore`/`--status` look there; a different cwd silently loses the
+   session. The default (unnamed) session writes `/root/.john/john.rec`, not
+   the cwd.
 6. **Save the evidence.** The hash file, the exact command line and the pot
    file go under `$WORK`.
 
@@ -80,7 +82,8 @@ Supported `--format` names in this build: `descrypt`, `bsdicrypt`, `md5crypt`,
 `Digits`. `--incremental` with no mode uses the default (ASCII).
 
 **Not available in this build** (all verified): `--list=build-info`,
-`--list=formats`, `--pot=FILE`, `--format=nt`, `--format=raw-md5`. Each returns
+`--list=formats`, `--pot=FILE`, `--format=nt`, `--format=raw-md5`, and `--help`
+(which prints `Unknown option: "--help"`). Each returns
 `Unknown option: "…"` or `Unknown ciphertext format name requested`.
 
 ## Typical workflows
@@ -114,8 +117,8 @@ timeout 300 john --incremental=Digits --format=crypt --session=digits combined.t
 john --status=digits; john --show --format=crypt combined.txt
 ```
 
-Incremental mode is single-salt-optimised; against `$6$` it runs at roughly
-500–600 candidates/s on this host, so it is only viable for a short or
+Incremental mode is single-salt-optimised; against `$6$` it runs at a few
+hundred candidates/s on this host, so it is only viable for a short or
 structured password.
 
 ### 4. Resume after an interruption
@@ -146,9 +149,9 @@ Use the "--show" option to display all of the cracked passwords reliably
 Session completed
 ```
 
-`--show` prints `user:plaintext` lines and a trailing blank line plus
-`N password hashes cracked, M left`. A bare hash file (no `user:` prefix) shows
-as `?:plaintext`.
+`--show` prints shadow-style lines — `user:password:18000:0:99999:7:::` — plus a
+trailing blank line and `N password hashes cracked, M left`. A bare hash file
+(no `user:` prefix) shows the same shape with `?` in the login field.
 
 The pot file is the durable artifact — `hash:plain`, one per line:
 
@@ -160,7 +163,10 @@ Parse it with `cut -d: -f2-` — but beware that `crypt(3)` hashes contain `$`
 and can contain `:`, so prefer `john --show` output for reporting. There is no
 JSON output in this build.
 
-`--test=3` output is the format inventory plus per-format speed:
+`--test=3` output is the format inventory plus per-format speed. Speeds are
+host- and load-dependent, not properties of the build — the same formats
+benchmarked roughly 2× slower in this container — so read the sample for shape,
+not for numbers:
 
 ```
 Benchmarking: descrypt, traditional crypt(3) [DES 128/128 SSE2]... DONE
@@ -209,10 +215,12 @@ be extracted with the format's own tooling (for example
 `ssh-keygen -p -f key -N ''` for a known passphrase prompt, or a Python helper
 in the venv).
 
-**Sessions live in the cwd.** `--session=NAME` writes `./NAME.rec` +
-`./NAME.log`, not to `/root/.john/`. Resume from the same directory or the
-session is gone. `timeout`/SIGINT leaves a usable `.rec` behind and prints
-`The session file ./NAME.rec was written`.
+**Named sessions live in the cwd; the default session does not.** `--session=NAME`
+writes `./NAME.rec` + `./NAME.log` in the current directory, and
+`--restore`/`--status` only find it again from there — a different cwd loses the
+session. An unnamed run writes `/root/.john/john.rec` and `/root/.john/john.log`
+and leaves nothing in the cwd. `timeout`/SIGINT leaves a usable `.rec` behind
+and prints `The session file ./NAME.rec was written`.
 
 **`--format` is optional but keep it consistent.** john auto-detects `crypt`
 from the hash prefix, and `--show` works with or without the flag on a
@@ -224,11 +232,13 @@ shadow file) is what returns "0 cracked".
 this host. Two concurrent john jobs will fight for the same 16 CPUs; use
 `--fork=N` with `--node=` for deliberate splits.
 
-**Speed expectations.** `crypt` (generic `crypt(3)`) benchmarks at 6080 c/s
-many-salts / single-salt in the hundreds; md5crypt 21 965 c/s; bcrypt (`$2a$05`)
-1435 c/s; LM 3754 K/s. rockyou (14.3 M words) against `$6$` at ~600 c/s is
-~6.6 hours *per pass*, and john's rule set will multiply that — size the attack
-before starting it.
+**Speed expectations.** The `--test=3` figures above are host- and
+load-dependent and this container has measured them about 2× lower, so treat
+them as order of magnitude and re-measure on the host at the time: `crypt`
+(generic `crypt(3)`) thousands of c/s many-salts and hundreds single-salt;
+md5crypt tens of thousands; bcrypt (`$2a$05`) ~1 k/s; LM in the millions.
+rockyou (14.3 M words) against `$6$` at a few hundred c/s is hours *per pass*,
+and john's rule set will multiply that — size the attack before starting it.
 
 **Interactive expectations.** john reads single keys from stdin
 (`q`/Ctrl-C to abort). Under a pipe or script, always append `</dev/null`;
