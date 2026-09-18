@@ -9,7 +9,9 @@ Conventions: `$TARGET` is an authorized host, `$WORK` is the per-engagement
 directory (`/working/engagements/<name>`), `$DC` is the domain controller.
 
 Versions: netexec `1.5.1+0.c7dc286b`, impacket
-`0.14.0.dev0+20260916.40533.c38d1eeb`, dploot `3.2.2`, paramiko `5.0.0`.
+`0.14.0.dev0+20260916.40533.c38d1eeb` (the revision resolved inside the netexec
+venv; the impacket venv carries the `0.13.1` release), dploot `3.2.2`,
+paramiko `5.0.0`.
 
 ---
 
@@ -42,8 +44,12 @@ Because `nxc smb --version` succeeds even on a build where SMB is broken (it
 never loads the protocol module), the reliable health check is:
 
 ```bash
-python3 -c "import nxc.protocols.smb.dpapi; print('smb protocol OK')"
+/opt/venvs/netexec/bin/python -c "import nxc.protocols.smb.dpapi; print('smb protocol OK')"
 ```
+
+That has to be the netexec venv's interpreter, not bare `python3`: `python3` on
+`PATH` is `/opt/py/bin/python3`, which has no `nxc` and reports
+`ModuleNotFoundError` even on a good image.
 
 ## 1. SMB credential validation against a loopback server (verified)
 
@@ -259,7 +265,7 @@ nxc ssh -L 2>&1 | grep -c 'Failed loading module'      # 0
 
 ```bash
 # protocol module health (does the SMB protocol actually import?)
-python3 -c "import nxc.protocols.smb.dpapi; print('smb protocol OK')"
+/opt/venvs/netexec/bin/python -c "import nxc.protocols.smb.dpapi; print('smb protocol OK')"
 
 # dump every credential found so far in the default workspace, as JSON
 python3 - <<'PY'
