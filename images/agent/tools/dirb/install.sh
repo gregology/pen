@@ -14,4 +14,10 @@ apt_install dirb
 # The wordlists are the reason this package is here; prove they arrived.
 test -d /usr/share/dirb/wordlists/vulns
 test -s /usr/share/dirb/wordlists/common.txt
-"$(command -v dirb)" 2>&1 | head -2 || true
+# Bare dirb prints its banner and usage, then exits non-zero. Grep for the
+# banner rather than discarding the status with `|| true`, which would report
+# success even if the binary were missing.
+dirb 2>&1 | grep -m1 -i 'dirb' || {
+    echo "dirb did not run" >&2
+    exit 1
+}

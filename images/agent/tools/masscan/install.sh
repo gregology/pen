@@ -10,4 +10,6 @@ set -eux -o pipefail
 # agent runs as root by design, so no capability needs granting here.
 apt_install masscan
 
-masscan --version 2>&1 | head -2
+# No `| head` here: truncating masscan's output kills it with SIGPIPE, which
+# `set -o pipefail` then reports as a failed build.
+masscan --version 2>&1 | grep -m1 'Masscan version'
