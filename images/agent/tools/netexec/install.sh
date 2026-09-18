@@ -24,7 +24,14 @@ python3 -m venv "$NETEXEC_VENV"
     "aardwolf<0.2.14" \
     "git+https://github.com/Pennyw0rth/NetExec@${NETEXEC_VERSION}"
 
-expose_venv "$NETEXEC_VENV"
+# `httpx` is skipped: netexec's dependency tree includes the Python httpx
+# library, whose console script lands in /usr/local/bin and shadows
+# ProjectDiscovery's httpx *binary* — a different program with the same name.
+# Without this the agent's `httpx` becomes a Python HTTP client that rejects
+# `-version` and every ProjectDiscovery flag. Verified on host01: the symlink
+# pointed at /opt/venvs/netexec/bin/httpx and `httpx -version` printed
+# "Usage: httpx [OPTIONS] URL". ProjectDiscovery's binary owns that name.
+expose_venv "$NETEXEC_VENV" httpx
 test -x /usr/local/bin/nxc
 "$NETEXEC_VENV/bin/pip" check
 verify_output '1.5.1' nxc --version
