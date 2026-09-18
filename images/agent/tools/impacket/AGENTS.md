@@ -17,11 +17,11 @@ explicit human confirmation per target, before the first packet.
 
 | Item | Value |
 |---|---|
-| Version | **0.14.0.dev0+20260916.40533.c38d1eeb** |
+| Version | **0.13.1** (the current PyPI release; check with `python3 -c "from importlib.metadata import version; print(version('impacket'))"`) |
 | Provenance | Installed from the PyPI release into its own venv, unpinned — see *Limits* for why |
 | Location | `/opt/venvs/impacket/bin/*.py` (virtualenv `/opt/venvs/impacket`, on `PATH`) |
 | Library | `/opt/venvs/impacket/lib/python3.11/site-packages/impacket` |
-| Banner | every script prints `Impacket v0.14.0.dev0+20260916.40533.c38d1eeb - Copyright Fortra, LLC and its affiliated companies` |
+| Banner | every script prints an `Impacket v<x.y.z>` banner line with the Fortra copyright |
 | Output | stdout only, by default. `secretsdump.py`, `GetNPUsers.py`, `GetUserSPNs.py`, `smbclient.py`, `smbserver.py` accept `-outputfile`; nothing else writes files |
 
 Scripts verified present (not exhaustive): `secretsdump.py`, `GetNPUsers.py`,

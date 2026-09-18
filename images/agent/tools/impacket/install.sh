@@ -18,4 +18,6 @@ expose_venv "$IMPACKET_VENV"
 # impacket's console scripts are named after the example files (`secretsdump.py`),
 # not with an `impacket-` prefix. Check the name that actually gets installed.
 test -x /usr/local/bin/secretsdump.py
-"$IMPACKET_VENV/bin/python3" -c 'import impacket; print(impacket.__version__)'
+# The package exposes no `impacket.__version__`; ask the installed metadata.
+"$IMPACKET_VENV/bin/python3" -c \
+    'from importlib.metadata import version; print("impacket", version("impacket"))'
