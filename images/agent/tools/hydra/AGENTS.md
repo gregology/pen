@@ -22,7 +22,7 @@ tools.
 | Output | stdout; `-o FILE` writes text (default), JSON or JSONv1 |
 | Wordlists | `/opt/wordlists/SecLists/Passwords/`, `/opt/wordlists/SecLists/Usernames/` |
 
-Compiled-in services (`hydra -h`, last line): `adam6500 asterisk cisco
+Compiled-in services (`hydra -h`, line 38 of 59): `adam6500 asterisk cisco
 cisco-enable cobaltstrike cvs firebird ftp[s] http[s]-{head|get|post}
 http[s]-{get|post}-form http-proxy http-proxy-urlenum icq imap[s] irc ldap2[s]
 ldap3[-{cram|digest}md5][s] memcached mongodb mssql mysql nntp oracle-listener
@@ -113,7 +113,7 @@ http-post-form://<path>:<params>:<condition>[:<optional>]
 ```bash
 hydra -U http-post-form
 hydra -U smb
-hydra -h | tail -3            # compiled-in service list
+hydra -h | sed -n '38p'      # compiled-in service list (line 38 of 59)
 
 hydra -l admin -p 'Summer2026!' -t 1 -f -s 8443 -S \
   10.0.0.5 https-post-form "/login:username=^USER^&password=^PASS^:F=Invalid credentials"
@@ -243,9 +243,9 @@ tools.
 noisy output and filter it rather than relying on `-q`.
 
 **`-M` and a positional target are mutually exclusive.** `hydra -M hosts.txt …
-127.0.0.1 http-get-form …` fails with
-`[ERROR] The -M FILE option can not be used together with a host on the
-commandline`. Drop the positional host.
+127.0.0.1 http-get-form …` still errors: the positional host is taken as the
+service name, so hydra prints a `[WARNING]` and then
+`[ERROR] Unknown service: 127.0.0.1`. Drop the positional host.
 
 **Module `OPT` must be its own argument.** `hydra … 127.0.0.1
 http-get-form:/login:…` gives `[ERROR] Unknown service: http-get-form:/login:…`.
