@@ -165,7 +165,9 @@ Burp instead of writing a file.
   is the useful override when you want Burp's parameter list instead of
   arjun's.
 - **`-oB` needs a Burp on `127.0.0.1:8080`.** With nothing listening, the export
-  throws connection errors that look like target failures.
+  throws connection errors that look like target failures. In this container
+  something *is* listening there — the VPN gateway's control API — so pass an
+  explicit `host:port` for your own proxy rather than accepting the default.
 
 ## Safety
 
