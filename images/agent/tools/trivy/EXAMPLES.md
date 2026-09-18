@@ -217,6 +217,10 @@ offline, from a report that is already on disk.
 
 ## 9. Reproducible offline re-scan
 
+The DB does not ship in the image: `/root/.cache/trivy` is absent until a
+DB-backed scan runs, and the first `--download-db-only` needs egress for the
+113.92 MiB download that expands to 1.4 GB on disk.
+
 ```bash
 trivy fs --download-db-only -q                      # one time, ~114 MiB
 TRIVY_SKIP_DB_UPDATE=true trivy fs --scanners vuln -q -f json -o /tmp/ex/off.json /tmp/ex
