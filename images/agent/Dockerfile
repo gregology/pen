@@ -167,10 +167,15 @@ RUN bash /tmp/install.sh
 # version. Everything else in tools/ lands at /tools/, mirroring the layout in
 # this repository so the relative links between documents keep working.
 #
+# The pattern must be recursive. A bare `--exclude=install.sh` is accepted and
+# silently matches nothing here, which ships every installer into the runtime
+# image with no warning — verified on host01, where `**/install.sh` removed all
+# 32 and the bare form removed none.
+#
 # This copy sits after every tool layer on purpose. A documentation edit
 # changes this layer and nothing else.
 # ------------------------------------------------------------------
-COPY --exclude=install.sh tools/ /tools/
+COPY --exclude=**/install.sh tools/ /tools/
 
 # ------------------------------------------------------------------
 # Agent runtime
