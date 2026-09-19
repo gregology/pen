@@ -110,9 +110,9 @@ built by hand — nothing is exported, copied or replayed, and no cookie leaves 
 namespace.
 
 ```bash
-browser --cdp http://127.0.0.1:9222 snapshot     # what the operator left open
-browser --cdp http://127.0.0.1:9222 text "#who"
-browser --cdp http://127.0.0.1:9222 close        # detach; the browser keeps running
+browser --cdp http://127.0.0.1:9224 snapshot     # what the operator left open
+browser --cdp http://127.0.0.1:9224 text "#who"
+browser --cdp http://127.0.0.1:9224 close        # detach; the browser keeps running
 ```
 
 What differs from a launched session:

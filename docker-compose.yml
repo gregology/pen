@@ -202,12 +202,28 @@ services:
       - VNC_LOCALHOST_ONLY=1
       # A renderer crash should not end the session the human just built.
       - KEEP_APP_RUNNING=1
-      # DevTools on loopback only — never a published port, never a socat
-      # forwarder. It is unauthenticated control of every cookie this
-      # browser holds (hard limit 14). The agent reaches it across the
-      # shared namespace; nothing outside it may.
-      - CHROMIUM_REMOTE_DEBUGGING=1
-      - CHROMIUM_REMOTE_DEBUGGING_PORT=9222
+      # Alpine ships Chromium's software rendering backends as separate
+      # packages and this image installs only the browser, so a container
+      # with no GPU has no Vulkan ICD and no ANGLE/SwiftShader fallback.
+      # A challenge widget that fingerprints through canvas and WebGL dies
+      # in the renderer without them. Installed at startup, which is the
+      # image's documented hook; see IMPLEMENTATION-V1.md for why that is a
+      # floor and not the intended end state.
+      - INSTALL_PACKAGES=chromium-swiftshader chromium-angle
+      # DevTools is unauthenticated control of every cookie this browser
+      # holds, so it stays on loopback inside the shared namespace and is
+      # never a published port (hard limit 14). The image's own CDP
+      # forwarder is what breaks that: it listens on every interface of the
+      # namespace, so it is off, and Chromium binds loopback itself. 9224
+      # because the forwarder owns 9222 and its target 9223 — if the
+      # forwarder ever runs anyway, it forwards to a dead port rather than
+      # republishing the live one.
+      - CHROMIUM_REMOTE_DEBUGGING=0
+      # The agent attaches with Playwright, which sends an Origin header
+      # recent Chromium rejects without the first flag. The rest stop the
+      # browser's own chatter to Google, which the agent's browser disables
+      # too and which has no business leaving this namespace.
+      - CHROMIUM_CUSTOM_ARGS=--remote-debugging-port=9224 --remote-allow-origins=* --disable-background-networking --disable-sync --disable-component-update
       # Unset leaves the view gated by the loopback bind, the forwarder and
       # iptables alone. RFC 6143 caps a VNC password at 8 characters.
       - VNC_PASSWORD=${BROWSER_VNC_PASSWORD:-}
