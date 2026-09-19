@@ -72,7 +72,7 @@ ln -sf /opt/browser/browser /usr/local/bin/browser
 # Verify by rendering, not by asking for a version. The failure this replaces
 # is silent: a browser that cannot launch makes every dependent tool report an
 # empty result that reads exactly like "the target has nothing".
-verify_output 'BROWSER-OK' browser run --timeout 60 <<'EOF'
+verify_output 'BROWSER-OK' browser --timeout 60 run <<'EOF'
 open data:text/html,<h1 id=t>placeholder</h1><script>document.getElementById("t").textContent="BROWSER-OK"</script>
 text #t
 close
