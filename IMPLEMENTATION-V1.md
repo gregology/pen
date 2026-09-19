@@ -280,6 +280,10 @@ Each test maps to a design guarantee:
 | Containment | Agent cannot reach the egress network or host LAN directly (e.g., `curl` a host-only address must fail); only llm-proxy and the gateway API respond. |
 | Audit trail | Run a DSH session against each provider alias; confirm every LLM request/response appears in `/home/user/pen/llm-logs/audit.jsonl`, including ones the agent might prefer to hide. |
 | Kill switch survives restart | `docker restart vpn-gateway`; repeat leak test before and after tunnel recovery. |
+| Browser renders and executes JavaScript | From the agent: `browser --target 127.0.0.1 run` against a fixture page whose text is written by a script (`python3 -m http.server 8090`), then `text #t` must return the scripted string. A browser that launches but does not execute JS is the failure this catches, and it is the failure that made three tools report empty results as if the target had nothing. |
+| Browser is reachable by the tools that expect one | `command -v chromium` resolves `/usr/local/bin/chromium`, and `katana -u <fixture> -hl -sc -d 1 -duc` returns URLs from a page whose links are added by script. Without `-sc` katana silently downloads its own Chromium instead, so the flag is part of the test. |
+| Screenshot path produces an image | `httpx -u <fixture> -ss -system-chrome -duc -json -o /tmp/s.json`, then confirm the stored screenshot is a non-empty PNG. This row exists because the previous image documented screenshot flags that had never once been run. |
+| Browser sandbox status is known, not assumed | `bash /tools/browser/sandbox-experiment.sh` exits 0 (sandbox available under a dropped uid) or 1 (it is not). Either answer is acceptable; an unrecorded answer is not, because it is the difference between a renderer isolated from the agent and a renderer that is not. |
 
 ### Re-verified after the toolchain deploy — 2026-09-17 (all pass)
 
