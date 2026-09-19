@@ -17,10 +17,12 @@ the form to use for a multi-step flow: one process instead of six.
 """
 
 import argparse
+import glob
 import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -183,14 +185,34 @@ class Session:
 
 
 def browser_executable():
-    sync_playwright = load_playwright()
+    """The browser this image installed: Playwright's headless shell.
 
-    with sync_playwright() as playwright:
-        path = playwright.chromium.executable_path
-    if not os.path.exists(path):
+    `playwright.chromium.executable_path` names the full browser, which this
+    image deliberately does not install — `playwright install --only-shell
+    chromium` fetches the 114 MB headless shell instead of the 187 MB browser.
+    The shell is what install.sh links as /usr/local/bin/chromium for the
+    go-rod tools, and it speaks CDP like any Chromium, which is all this
+    script needs to drive it.
+    """
+    path = shutil.which("chromium")
+    if not path:
+        # A bare environment (dropped privileges, no inherited PATH): fall back
+        # to the pinned build directory, the way install.sh resolves it.
+        shells = sorted(
+            glob.glob(
+                os.path.join(
+                    BROWSERS_PATH,
+                    "chromium_headless_shell-*",
+                    "chrome-*",
+                    "chrome-headless-shell",
+                )
+            )
+        )
+        path = shells[-1] if shells else None
+    if not path or not os.path.exists(path):
         raise Failure(
-            f"no browser binary at {path} — the image was built without "
-            "`playwright install --only-shell chromium`"
+            f"no browser binary at {path or BROWSERS_PATH} — the image was "
+            "built without `playwright install --only-shell chromium`"
         )
     return path
 

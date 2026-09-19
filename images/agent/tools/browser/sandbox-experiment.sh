@@ -47,11 +47,16 @@ if [ ! -x "$PY" ]; then
     echo "  /opt/venvs/browser/bin/python3 is missing — is this the agent image?" >&2
     exit 1
 fi
-BROWSER="$("$PY" -c 'from playwright.sync_api import sync_playwright
-with sync_playwright() as p:
-    print(p.chromium.executable_path)' 2>/dev/null)"
+# The image installs Playwright's headless shell (--only-shell), so
+# playwright.chromium.executable_path — the full browser — is not a path that
+# exists here. Resolve the shell the way the CLI and the go-rod tools do: the
+# /usr/local/bin/chromium link first, then the pinned build directory behind it.
+BROWSER="$(command -v chromium || true)"
+if [ -z "$BROWSER" ]; then
+    BROWSER="$(find /opt/ms-playwright -type f -name 'chrome-headless-shell' -print -quit 2>/dev/null)"
+fi
 if [ -z "$BROWSER" ] || [ ! -x "$BROWSER" ]; then
-    echo "  no browser at $BROWSER — the image was built without 'playwright install --only-shell chromium'" >&2
+    echo "  no browser at ${BROWSER:-<none>} — the image was built without 'playwright install --only-shell chromium'" >&2
     exit 1
 fi
 printf '  browser: %s\n' "$BROWSER"
