@@ -57,6 +57,9 @@ graphql-cop -l            # the test names this build will actually run
   and `curl_verify` in the JSON output embeds the full request including those
   headers.
 - **Egress is the tunnel.** `-x` is for local interception, not containment.
+- **No proxy is set by default.** `-x` is unset unless you pass it, so nothing
+  here reaches `127.0.0.1:8080` — which in this container is the VPN gateway's
+  control API, not a proxy — unless you aim it there.
 
 ## Command reference
 

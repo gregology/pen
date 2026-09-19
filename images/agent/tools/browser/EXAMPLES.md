@@ -29,8 +29,9 @@ BROWSER="browser --target 127.0.0.1 --session $WORK/browser-session"
 
 `dalfox` reports a DOM-XSS *candidate* (`[A]`) from static analysis: it saw
 `innerHTML = location.search` in the source. That is a claim about a victim's
-browser, and only a browser can settle it. This fixture has exactly that sink
-behind the URL hash, which never leaves the browser.
+browser, and only a browser can settle it. The fixture below puts the same sink
+behind the URL hash instead, so the payload never reaches the server and the
+only thing that can execute it is an engine.
 
 ```bash
 cat > "$WORK/fixtures/domxss.html" <<'EOF'
@@ -103,7 +104,10 @@ finding — the URL, the sink, the marker expression, and its value.
 before the subcommand, which is why this one is written out in full.
 
 ```bash
-browser --session "$WORK/browser-session" --har "$WORK/har/domxss.har" run <<'EOF'
+# The heredoc is unquoted (`<<EOF`, not `<<'EOF'`) so the shell expands $WORK
+# before the tool reads the lines: inside a run script there is no shell, and a
+# literal `$WORK/...` path would be created relative to the current directory.
+browser --session "$WORK/browser-session" --har "$WORK/har/domxss.har" run <<EOF
 open http://127.0.0.1:8090/domxss.html#<img src=x onerror="window.__penFired=1">
 screenshot $WORK/evidence/domxss-sink.png
 eval "document.getElementById('results').innerHTML"
@@ -125,11 +129,11 @@ so the only server-side evidence is the page fetch. For a client-side finding
 the evidence is the screenshot, the `eval` output and the payload URL — capture
 all three or the finding is not reproducible.
 
-**Against a real target**, the same three steps are one `open` with the payload
-in the parameter the scanner flagged, and the marker check afterwards. That is
-active interaction with the target, executing attacker-controlled script in the
-target's origin as whoever the browser session is signed in as: get
-confirmation before it, not after.
+**Against a real target**, the same three steps apply: a negative control, then
+an `open` with the payload in the parameter or fragment the scanner flagged,
+then the marker check. That is active interaction with the target, executing
+attacker-controlled script in the target's origin as whoever the browser session
+is signed in as: get confirmation before it, not after.
 
 ## 2. Map an SPA's post-hydration routes
 
@@ -471,18 +475,22 @@ ls -l "$WORK/evidence" "$WORK/screenshots"
 /working/engagements/example/screenshots/127.0.0.1_8090_domxss.html_20260917T101500.png
 /working/engagements/example/screenshots/127.0.0.1_8090_domxss.html_20260917T101502.png
 /working/engagements/example/evidence/domxss-results-sink.png
-```
-
-`$WORK/evidence`:
-```
+/working/engagements/example/evidence/127.0.0.1_8090_domxss.html_20260917T101504.png
+/working/engagements/example/evidence:
+total 108
+-rw-r--r-- 1 root root 63188 Sep 17 10:15 127.0.0.1_8090_domxss.html_20260917T101504.png
 -rw-r--r-- 1 root root 48213 Sep 17 10:15 domxss-results-sink.png
-```
 
-`$WORK/screenshots`:
-```
+/working/engagements/example/screenshots:
+total 108
 -rw-r--r-- 1 root root 41220 Sep 17 10:15 127.0.0.1_8090_domxss.html_20260917T101500.png
 -rw-r--r-- 1 root root 63188 Sep 17 10:15 127.0.0.1_8090_domxss.html_20260917T101502.png
 ```
+
+The two `screenshots/` entries are the same page captured twice — the viewport
+and then the full page. On this fixture they are nearly the same image; the
+difference only shows on a page taller than the 1280×1024 viewport, which is
+exactly when `--full` is the flag you want. The sizes above are illustrative.
 
 Notes that matter at engagement time:
 
@@ -566,9 +574,12 @@ path: /api/orders
 
 Read the details off that transcript:
 
-- The separator is `=`. `-H "Authorization: Bearer …"` would have injected a
-  header whose *name* is `Authorization: Bearer …`, and the echo would still say
-  `auth: (none)` while `headers` printed a success line.
+- The separator is `=`, and the tool splits on the *first* one: `-H
+  "Authorization: Bearer …"` has no `=` at all, so it injects one header whose
+  name is the entire string and whose value is empty. The echo would have said
+  `auth: (none)` — or the request would have failed outright, depending on how
+  Chromium treats the invalid name — while `headers` still printed a success
+  line.
 - `headers` prints header names only, never values, so the injection is visible
   in the transcript without leaking the token.
 - The scope glob is `scheme://host/**` — everything on that origin, including

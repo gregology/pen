@@ -205,6 +205,11 @@ process. Session-wide options belong to the outer invocation:
 
 - Lines are split with shell quoting rules, so quote any value containing
   spaces: `fill @2b8e5f1 "hunter two"`.
+- **Quoting is not shell expansion.** There is no shell in the loop: `$WORK` on
+  a line stays the literal string `$WORK` (and `~` stays `~`), so a relative
+  path that starts with `$` lands in the current directory. Either write the
+  absolute path, or pipe the script in with an *unquoted* heredoc (`<<EOF`) and
+  let the invoking shell expand it first.
 - A line whose first word starts with `#` is a comment; blank lines are ignored.
 - `run` cannot appear inside a run script.
 - `close` ends the script immediately (the remaining lines are not executed).
@@ -459,13 +464,14 @@ one.
   "authenticated session" logic uses `localStorage`; `browser storage` against a
   `localStorage`-based app looks empty. It also reads the origin of the *current*
   page, so `open` the app first.
-- **`headers -H` takes `NAME=VALUE`, not `NAME: VALUE`.** `-H 'Authorization:
-  Bearer x'` sets a header literally named `Authorization: Bearer x`. With no
-  `-H` at all it fails (`browser: pass at least one -H name=value`). And the
-  handler lives in the Playwright connection this invocation opens, so inject the
-  headers and make the request that needs them in the *same* `browser run`
-  script; a `headers` command on its own applies to nothing and prints a success
-  line either way.
+- **`headers -H` takes `NAME=VALUE`, not `NAME: VALUE`.** The tool splits on the
+  first `=`, so `-H 'Authorization: Bearer x'` has no `=` and becomes one header
+  named `Authorization: Bearer x` with an empty value — not an `Authorization`
+  header, while `headers` prints a success line regardless. With no `-H` at all
+  it fails (`browser: pass at least one -H name=value`). And the handler lives
+  in the Playwright connection this invocation opens, so inject the headers and
+  make the request that needs them in the *same* `browser run` script; a
+  `headers` command on its own applies to nothing.
 - **The page `eval` runs in is the page the tool is holding.** If a site opens a
   new tab, that tab is invisible to every command: the CLI always acts on the
   first page of the context. There is no flag to select or switch pages, and no
@@ -483,6 +489,12 @@ one.
 - **With `--target` set, a `data:` URL is refused.** `data:` and `about:` URLs
   have no hostname, so the scope check rejects them with `… is outside the
   declared scope`. Drop `--target` for a local smoke test.
+- **Local fixtures use port 8090, not 8080.** In this namespace 8080 is the VPN
+  gateway's unauthenticated exit-node control API, already bound and answering
+  401 — a "target" there is the control plane, not a test service
+  (`python3 -m http.server 8090 --bind 127.0.0.1`, target
+  `http://127.0.0.1:8090/`). A port that appears *inside* a scan's target list is
+  a different thing and keeps its own number.
 - **Two invocations against one session share one page.** There is no locking.
   Concurrent runs interleave their navigations in the same tab, so a `--har`
   file can contain another run's traffic. Serialize browser work.

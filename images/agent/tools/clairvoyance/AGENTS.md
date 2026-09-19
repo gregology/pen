@@ -52,6 +52,9 @@ command -v clairvoyance   # /usr/local/bin/clairvoyance
 - **TLS verification is on by default.** `-k/--no-ssl` turns it off, which also
   hides certificate problems.
 - **Egress is the tunnel.** `-x` is for local interception, not containment.
+- **No proxy is set by default.** `-x` is unset unless you pass it, so nothing
+  here reaches `127.0.0.1:8080` — which in this container is the VPN gateway's
+  control API, not a proxy — unless you aim it there.
 
 ## Command reference
 

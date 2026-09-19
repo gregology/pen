@@ -227,7 +227,7 @@ whichever writers you enabled; **with no writer, there is no metadata at all.**
 | `.title` | Page title |
 | `.html` | First response body. Suppressed by `--skip-html` |
 | `.failed`, `.failed_reason` | Whether the render failed, and why |
-| `.screenshot`, `.file_name`, `.is_pdf` | Screenshot reference and file name |
+| `.screenshot`, `.file_name`, `.is_pdf` | The model's screenshot field; `.file_name` is the image written on disk |
 | `.tls` | `protocol`, `cipher`, `subject_name`, `issuer`, `valid_from`, `valid_to`, `san_list`, … |
 | `.technologies[]` | Detected technologies (`.value`) |
 | `.headers[]`, `.cookies[]` | Response headers and cookies set by the page |

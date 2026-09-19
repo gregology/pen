@@ -150,9 +150,8 @@ Notes:
 - `--screenshot-fullpage` captures the whole page, not the 1280x720 viewport.
 - `--chrome-window-x/--chrome-window-y` change the viewport that the full-page
   capture starts from; they are the only size controls.
-- `.file_name` is the image on disk under `-s`; `.screenshot` and `.html` hold
-  the inlined data. `--skip-html` leaves the HTML out if the record should be
-  smaller.
+- `.file_name` is the image on disk under `-s`. `--skip-html` leaves the HTML
+  out of the record if it should be smaller.
 - An authenticated capture is evidence containing the session's view of the
   application — keep it in `$WORK` and treat it as sensitive.
 
