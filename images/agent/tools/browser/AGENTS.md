@@ -506,6 +506,13 @@ one.
   stderr, including every DevTools protocol warning. It is the first place to
   look when a launch fails (`chromium exited immediately`), and it is not
   rotation-managed.
+- **If every command fails with `browser: ModuleNotFoundError: No module named
+  'playwright'`, suspect the interpreter, not the target.** The entry point is a
+  script whose shebang is `/usr/bin/env python3`, and Playwright lives in
+  `/opt/venvs/browser` — not in the general-purpose `/opt/py` that `python3`
+  resolves to. Invoke it through the venv
+  (`/opt/venvs/browser/bin/python3 /opt/browser/browser …`) and report the
+  mismatch rather than reinstalling anything.
 
 ## Safety and scope
 

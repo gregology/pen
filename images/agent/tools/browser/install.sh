@@ -58,6 +58,14 @@ BROWSER_BIN="$(find /opt/ms-playwright -type f -name 'chrome-headless-shell' -pr
 test -n "$BROWSER_BIN"
 ln -sf "$BROWSER_BIN" /usr/local/bin/chromium
 
+# The entry point must run under the venv interpreter, not whatever `python3`
+# happens to be first on PATH. Bare `python3` in this image is /opt/py, which
+# has no Playwright, so an /usr/bin/env shebang installs a command that fails
+# with ModuleNotFoundError on its first real use. Rewriting the first line
+# makes the interpreter a property of the installed file.
+sed -i "1s|^#!.*|#!${BROWSER_VENV}/bin/python3|" /opt/browser/browser
+head -1 /opt/browser/browser | grep -q "^#!${BROWSER_VENV}/bin/python3$"
+
 chmod +x /opt/browser/browser
 ln -sf /opt/browser/browser /usr/local/bin/browser
 
