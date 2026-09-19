@@ -4,5 +4,6 @@ vpn-configs/
 llm-logs/
 dsh-data/
 working/
+browser-profile/
 
 __pycache__/

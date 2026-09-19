@@ -12,5 +12,9 @@ set -eu
 # same port. killswitch.sh scopes both to host/sandbox/LAN.
 socat TCP-LISTEN:3080,fork,reuseaddr TCP:127.0.0.1:3090 &   # dsh web UI
 socat TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:8081 &   # code-server
+# The browser sidecar's view, forwarded for the same reason. Its DevTools
+# port is deliberately not forwarded: reachability is the only control on
+# an unauthenticated endpoint that holds live logins.
+socat TCP-LISTEN:3082,fork,reuseaddr TCP:127.0.0.1:5800 &   # browser view
 
 exec python3 /app/api.py
