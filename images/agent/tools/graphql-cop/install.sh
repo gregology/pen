@@ -5,7 +5,11 @@ set -eux -o pipefail
 . /tmp/tool-install-helpers.sh
 
 GRAPHQL_COP_TAG=1.16
-GRAPHQL_COP_SHA256=56b201ce7fb81baa5a7ba4e562be27914267174ca70813f60af06a3d81811d9a
+# Hash of the tarball GitHub generates for this tag, re-derived 2026-09-19 and
+# verified by diffing a clone of tag 1.16 (commit 2b7e086e) against the extracted
+# archive. Upstream's version.py still reports VERSION = '1.15' at that tag, so the
+# version string is not evidence the pin is wrong.
+GRAPHQL_COP_SHA256=ddbd7f4b6bdecc4af9902b13f0a767cba66993a34bcf5f1b7b8409f184428910
 GRAPHQL_COP_VENV=/opt/venvs/graphql-cop
 
 # Not on PyPI, and a script rather than a package: it runs from its own tree,
