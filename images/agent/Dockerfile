@@ -64,6 +64,16 @@ COPY tools/_lib/install-helpers.sh /tmp/tool-install-helpers.sh
 COPY tools/arjun/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
+# The driver script sits beside its installer and is placed by it, so the
+# two change together: the CLI and the version of Playwright it launches are
+# one unit.
+COPY tools/browser/browser /opt/browser/browser
+COPY tools/browser/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
+COPY tools/clairvoyance/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
 COPY tools/commix/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
@@ -85,6 +95,12 @@ RUN bash /tmp/install.sh
 COPY tools/gobuster/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
+COPY tools/graphql-cop/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
+COPY tools/gowitness/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
 COPY tools/hashcat/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
@@ -98,6 +114,9 @@ COPY tools/impacket/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/john/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
+COPY tools/jwt_tool/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/katana/install.sh /tmp/install.sh
@@ -124,10 +143,16 @@ RUN bash /tmp/install.sh
 COPY tools/nuclei/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
+COPY tools/oauth2c/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
 COPY tools/pypykatz/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/scapy/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
+COPY tools/schemathesis/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/sqlmap/install.sh /tmp/install.sh
@@ -149,6 +174,9 @@ COPY tools/tshark/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/wafw00f/install.sh /tmp/install.sh
+RUN bash /tmp/install.sh
+
+COPY tools/websocat/install.sh /tmp/install.sh
 RUN bash /tmp/install.sh
 
 COPY tools/whatweb/install.sh /tmp/install.sh
