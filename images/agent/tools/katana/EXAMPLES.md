@@ -158,21 +158,36 @@ wc -l "$WORK/params.txt"
 
 ## Headless crawling: what it actually needs
 
-`-hl` and `-hh` download a Chromium build via go-rod on first use, then launch
-and run it:
+`-hl` and `-hh` execute the page in a real browser, so client-side routes and
+XHR endpoints that only exist after hydration show up. Pass `-sc` so katana
+uses the browser this image already carries:
 
 ```bash
-$ katana -u http://127.0.0.1:8099 -d 1 -hl -duc -ct 25s
-[launcher.Browser] Download: https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
-[launcher.Browser] Downloaded: /root/.cache/rod/browser/chromium-1321438
-[INF] Crawl completed in 1s. 0 endpoints found.
-$ echo $?
-0
+katana -u http://127.0.0.1:8090 -hl -sc -d 1 -duc -ct 25s
 ```
 
-The download is roughly 150 MB from `storage.googleapis.com`, so headless needs
-egress on first use; the browser is then cached, so later runs reuse it.
+`-sc` makes go-rod's `launcher.LookPath()` resolve `/usr/local/bin/chromium`
+(installed by `tools/browser`). Without it, katana downloads its own Chromium
+from `storage.googleapis.com` into `/root/.cache/rod/browser/` — roughly
+181 MB, needing the tunnel up, repeated after every container recreate. With
+`-sc` and no browser on `PATH` the run fails with
+`the chrome browser is not installed`.
+
+Always crawl a fixture that is known to render client-side before trusting a
+headless result:
+
+```bash
+# 1. confirm the browser path works on a page whose content is scripted
+python3 -m http.server 8090 &   # serve a fixture with a <script> that adds a link
+katana -u http://127.0.0.1:8090/spa.html -hl -sc -d 1 -duc -ct 20s
+# expect the script-injected URL in the output
+
+# 2. only then point it at the real target
+katana -u "$TARGET" -hl -sc -d 2 -ct 5m -rl 25 -c 5 -p 5 -duc \
+  -jsonl -o "$WORK/katana-headless.jsonl"
+```
 
 `-hl` is labelled experimental upstream. A headless crawl that exits 0 with
-`0 endpoints found` is not evidence that the target has no URLs — use `-jc`
-(non-headless JavaScript parsing), which needs no browser, as the baseline.
+`Crawl completed in 1s. 0 endpoints found.` is not evidence that the target has
+no URLs — use `-jc` (non-headless JavaScript parsing), which needs no browser,
+as the baseline.

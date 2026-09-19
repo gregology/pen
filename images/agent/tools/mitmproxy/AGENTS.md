@@ -4,8 +4,9 @@ mitmproxy is an interactive HTTP(S) proxy that terminates TLS with its own CA,
 which makes it the tool for reading and rewriting traffic that is otherwise
 opaque: authenticated API calls, session cookies, request signing, and client
 behaviour under modified responses. In this container only `mitmdump` is usable —
-`mitmproxy` needs a TTY and `mitmweb` needs a browser — but `mitmdump` plus an
-addon script covers capture, replay, filtering, and rewriting without either.
+`mitmproxy` needs a TTY and `mitmweb`'s UI needs a browser to view — but
+`mitmdump` plus an addon script covers capture, replay, filtering, and rewriting
+without either.
 
 ## Installation and location
 
@@ -269,10 +270,13 @@ traffic that a client trusts.
   `Error: mitmproxy's console interface requires a tty. Please run mitmproxy in
   an interactive shell environment.` and exits 120. The agent's shell has no TTY,
   so the console tool is unusable.
-- **`mitmweb` needs a browser.** Its UI is a web app; there is no browser and no
-  display in this container. The process starts and serves HTTP (verified `200`
-  on `http://127.0.0.1:8081/`), and the JSON API (`/flows`) works, but expect to
-  drive everything through `mitmdump` instead.
+- **`mitmweb`'s UI is not usable from this container.** It is a web app served
+  on a port inside the agent's network namespace, and nothing here renders it:
+  `tools/browser` is a separate process that navigates to targets, not a client
+  for local admin UIs. The process starts and serves HTTP (verified `200` on
+  `http://127.0.0.1:8081/`) and the JSON API (`/flows`) works, so scripting
+  against the API is possible, but expect to drive everything through
+  `mitmdump` instead. `mitmproxy` itself needs a TTY (see above).
 - **Transparent mode does no redirection by itself.** `--mode transparent`
   assumes packets are already being redirected to the proxy port by firewall
   rules; `iptables` and `nft` are not installed in this image. Use `regular`

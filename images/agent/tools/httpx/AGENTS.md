@@ -419,16 +419,26 @@ subfinder -d "$DOMAIN" -silent -duc \
   did `-random-agent=false -H 'User-Agent: FIXED-UA'`. If a target behaves
   differently for a known user agent, confirm the header that actually arrived
   (a header-counting local server) before relying on it.
-- **Headless screenshots are unverified in this image.** `-ss` downloads a
-  Chromium build via go-rod into `/root/.cache/rod/browser/`. The shared
-  libraries Chromium needs (`libnss3`, `libnspr4`, `libatk*`, `libcups`,
-  `libgbm` and friends) **are now installed by `tools/katana/install.sh`**,
-  which previously was not the case — without them the browser failed to launch
-  with `Failed to launch the browser ... chrome: error while loading shared
-  libraries: libnss3.so: cannot open shared object file`. No screenshot has
-  been taken on a built image since, so treat the screenshot flags (`-ss`,
-  `-system-chrome`, `-jsc`, `-esb`, `-ehb`) as untested until someone runs one,
-  and do not read an empty result from them as "no page".
+- **Headless screenshots need `-system-chrome`, and remain unverified here.**
+  `-ss` without `-system-chrome` downloads a Chromium build via go-rod into
+  `/root/.cache/rod/browser/`, which needs the tunnel up on first use and is
+  repeated after every container recreate. With `-system-chrome`, httpx
+  resolves the pinned browser at `/usr/local/bin/chromium` (installed by
+  `tools/browser`) through the same `launcher.LookPath()` the other rod tools
+  use, and no download happens:
+
+  ```bash
+  httpx -l "$WORK/live.txt" -ss -system-chrome -duc -json -o "$WORK/screens.json"
+  ```
+
+  With `-system-chrome` and no browser on `PATH` it fails loudly with
+  `the chrome browser is not installed`. No screenshot has been taken through
+  this path on a built image yet, so treat the screenshot flags (`-ss`, `-jsc`,
+  `-esb`, `-ehb`) as **untested until someone runs one**, and do not read an
+  empty result from them as "no page". The shared libraries Chromium needs are
+  installed by `tools/browser/install.sh`; without them the browser fails to
+  launch with `Failed to launch the browser ... chrome: error while loading
+  shared libraries: libnss3.so: cannot open shared object file`.
 - **`-tls-grab` on a plaintext HTTP port** returns no `.tls` object, not an
   error.
 - **`-path` multiplies requests.** Every path is probed on every host; ten
