@@ -31,6 +31,7 @@ scripted `run` reach the same browser.
 | Screenshots | `$WORK/screenshots` by default, or the `PATH`/`--dir` you give |
 | System libraries | The 21 Chromium shared libraries plus `fonts-liberation`, installed by `tools/browser/install.sh` |
 | Display and TTY | None. It is the headless shell: no X server, no TTY, no window |
+| Sandbox probe | `/tools/browser/sandbox-experiment.sh` — a diagnostic, not part of the tool. Run it in the container (`bash /tools/browser/sandbox-experiment.sh`) to test whether Chromium's own sandbox can start under a dropped uid on this host: exit 0 means it can, 1 means it cannot and `--no-sandbox` stays. It creates a `browser` system user when one is absent, so it needs root |
 
 `browser --help` and `browser <command> --help` print the same flags documented
 here; this document describes the source described above, not a later upstream
