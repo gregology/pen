@@ -95,10 +95,46 @@ multi-stage recon campaigns.
 | `ffuf` | 2.3.0 | upstream release | The standard fuzzer: content discovery, vhost discovery, arbitrary `FUZZ` placement. Single static binary, JSON output, `-rate`/`-p` controls. |
 | `feroxbuster` | 2.13.1 | upstream release | Recursive content discovery that follows links and handles redirects out of the box. Kept alongside ffuf deliberately: ffuf for targeted fuzzing, feroxbuster for "map the whole tree". |
 | `commix` | 4.1 | upstream source | Command-injection detection. Nothing else covers OS command injection, which is the highest-impact class for shell-out code paths. **Not from PyPI** — the package published under that name is an unrelated installer stub. |
-| `dalfox` | 3.2.3 | upstream `.deb` | DOM-aware XSS scanning with JSON output. Nuclei's XSS templates are pattern matches; dalfox drives the payloads through a parser. |
+| `dalfox` | 3.2.3 | upstream `.deb` | XSS scanning and verification with JSON output, now via the `oxc` JavaScript parser rather than a headless browser. Nuclei's XSS templates are pattern matches; dalfox drives the payloads through a parser. |
 | `arjun` | 2.2.7 | PyPI | HTTP parameter discovery — the hidden parameters a crawler cannot see and ffuf cannot guess. |
 | `sqlmap` | bookworm | `apt` | SQL injection detection and enumeration. |
 | `dirb` | bookworm | `apt` | **Legacy.** Single-threaded, unmaintained, no JSON, TLS verification off by default. Installed for its server-specific `vulns/*` wordlists, not as a discovery tool. Prefer gobuster/ffuf/feroxbuster. |
+
+### Client-side testing and the browser
+
+| Tool | Version | Install | Why this one |
+|---|---|---|---|
+| `browser` | Playwright 1.63.0 / Chromium 153 headless shell | PyPI + `playwright install --only-shell` | A drivable browser for the class of testing nothing else here can do: DOM sinks that only fire in a real engine, postMessage and prototype-pollution paths, SPA routes that exist only after hydration, sessions held in localStorage, and screenshots as evidence. It also supplies `/usr/local/bin/chromium`, which is the browser `katana -hl -sc`, `httpx -ss -system-chrome` and `nuclei -headless -sc` resolve through go-rod's `LookPath()`. |
+
+Before this, three tools documented a headless capability that no one had ever
+exercised; the shared libraries were installed and the browser was assumed. The
+replacement is a pinned browser plus a documented `-sc` path for each consumer.
+
+`chrome-devtools-mcp` was rejected: Google documents root as unsupported, its
+`--headless` defaults to false, and it reports usage statistics and may send
+trace URLs to a third-party API by default — an egress path a fail-closed
+platform should not acquire for a coding-assistant tool. `agent-browser` was
+rejected: it downloads its own Chrome for Testing, ships cloud-provider backends
+that would be a second egress path, and is built for desktops with a UI. The
+third-party `dsh-*` browser plugins are unaudited single-maintainer packages and
+are not a delivery route this platform takes.
+
+### API testing (schema-driven, GraphQL, tokens, WebSocket)
+
+| Tool | Version | Install | Why this one |
+|---|---|---|---|
+| `schemathesis` | 4.27.4 | PyPI | Property-based testing from an OpenAPI or GraphQL schema. Nothing else here reads a spec and generates requests from it; JSON/JUnit/NDJSON/HAR reports. |
+| `graphql-cop` | tag 1.16 | upstream source | GraphQL misconfiguration and DoS-class checks (alias and batch overloading, field duplication, introspection, GraphiQL exposure, field suggestions) with JSON output and reproduction cURLs. |
+| `clairvoyance` | 2.5.5 | upstream source | Recovers a GraphQL schema through field-suggestion errors when introspection is disabled. Answers a different question from graphql-cop: what is the schema, versus what is wrong with the endpoint. |
+| `jwt_tool` | 2.3.0 | upstream source | JWT validation, forging and tampering: `alg:none`, null signature, key confusion, JWKS spoofing, claim tampering, dictionary attacks. Nothing else here covers token structure at all. |
+| `oauth2c` | 1.21.0 | upstream release | Obtains tokens across the OAuth2/OIDC grants, which is what the authenticated-API work needs before any scanner can reach behind a login. |
+| `websocat` | 1.14.1 | upstream release | Scripted WebSocket framing and relay. There is no standard CLI WebSocket fuzzer, so this plus a small client is the workflow. |
+
+`graphw00f` was left out as fingerprinting that adds little over what
+identifier-in-response checks already show. `InQL` was rejected as Burp-only.
+`GraphQLmap` and `jwtXploiter` are abandoned. `RESTler` answers a genuinely
+different question (stateful operation sequences) but needs Python 3.12 plus a
+.NET 8 toolchain built from source; revisit only if sequence testing is needed.
 
 ### TLS and transport
 
@@ -111,6 +147,15 @@ multi-stage recon campaigns.
 `sslyze` and `sslscan` were rejected as duplicates of testssl.sh; sslscan's
 Debian version is three years behind, which for a TLS-era-sensitive tool is
 disqualifying.
+
+### Evidence and reporting
+
+| Tool | Version | Install | Why this one |
+|---|---|---|---|
+| `gowitness` | 3.2.0 | upstream release | Screenshots a list of URLs into JSONL/CSV/SQLite for a report. Uses its own Chrome rather than the Playwright build, because it wants a `chrome` binary path and not a headless shell; see its `AGENTS.md`. |
+
+`aquatone` was rejected as archived. `EyeWitness` overlaps gowitness with far
+lower activity.
 
 ### Credential access and exploitation
 
@@ -138,6 +183,11 @@ disqualifying.
 |---|---|---|---|
 | `words` | SecLists 2026.1 | upstream tarball | The wordlists every discovery tool reads, pinned by tag so a finding is reproducible, at `/opt/wordlists/current`. |
 
+`Assetnote wordlists` were considered and left out: the repository carries no
+tagged release, and its generator now publishes the lists to object storage
+outside the git history, so there is no immutable artifact to pin by hash. A
+wordlist that cannot be reproduced is worse than the one already here.
+
 ### Base image, not tools
 
 `curl`, `wget`, `git`, `jq`, `yq`, `ripgrep`, `file`, `less`, `tree`, `vim-tiny`,
@@ -153,18 +203,26 @@ so the appliance carries a curated set rather than the distro catalogue.
 system, it belongs in the Dockerfile's base block. If it is a named pentest
 capability, it belongs in `tools/<name>/` with its own `install.sh` and
 `AGENTS.md`. Diagnostics utilities (`whois`, `traceroute`, `tcpdump`) are base;
-scanners with docs directories are tools.
+scanners with docs directories are tools. The browser is a tool rather than a
+base package for the same reason: it is a capability the agent points at a
+target, and it needs version pinning and operator documentation.
 
 ## Deliberately absent
 
 - **Wireless tooling** (`aircrack-ng`, `kismet`): needs a radio, and the
   container has none.
-- **Browser-driven tooling** (headless Chromium for screenshots or JS-heavy
-  crawling) — the libraries are installed for katana and httpx, but the image
-  carries no browser, and adding one is a large surface for a modest gain.
+- **A browser with a visible UI, or a virtual display** (Xvfb, a desktop
+  Chromium): everything here is headless, and a screenshot is a file, not a
+  window. `tools/browser` covers the headless case.
 - **Anything requiring a Docker socket.** There is none, deliberately: trivy
   scans images over the network or from a tar, and `rootfs /` covers this
   container.
+- **HTTP request smuggling tooling.** The commonly recommended implementations
+  (`smuggler.py`, `h2csmuggler`) have had no commits in four to five years and
+  have never cut a release. The maintained HTTP/2 desync work
+  (`http2smugl`, `h2spacex`) is worth revisiting if a target terminates HTTP/2
+  and the engagement covers protocol-level attacks — the current template set
+  covers the CL.TE/TE.CL basics.
 - **Orchestration frameworks** (bbot, recon-ng): they wrap tools already present
   and add a scheduling layer the platform does not need yet.
 

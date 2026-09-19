@@ -291,12 +291,12 @@ not optional. The flag fails in two different ways and only one is loud:
 - If BuildKit cannot resolve the pinned frontend, the build errors.
 - **If the pattern does not match anything, the COPY succeeds and ships every
   installer into the runtime image with no warning.** Verified on host01: a
-  bare `--exclude=install.sh` removed none of the 32 installers, and
-  `--exclude=**/install.sh` removed all 32. The pattern must be recursive; the
+  bare `--exclude=install.sh` removed none of the 40 installers, and
+  `--exclude=**/install.sh` removed all 40. The pattern must be recursive; the
   trailing `*` in the COPY is what covers `install.sh.template` too.
 
 Run the `find` after any change to that COPY line, and compare the count of
-`AGENTS.md` files (32) against the tool directory count.
+`AGENTS.md` files (40) against the tool directory count.
 
 ## Conventions these docs follow
 
