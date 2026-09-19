@@ -16,7 +16,10 @@ The browser is launched once and kept alive. Every `browser` invocation is a
 separate process that attaches to that same Chromium over the DevTools
 protocol, so a sequence of commands acts on one session: cookies, `localStorage`
 and a signed-in state survive between them, and a one-shot command and a
-scripted `run` reach the same browser.
+scripted `run` reach the same browser. `--cdp` points that same attachment at a
+browser this tool did not launch — the operator's, with a real display — which
+is how it continues a session a human cleared by hand. See *The shared browser*
+below.
 
 ## Installation and location
 
@@ -96,6 +99,43 @@ obtain a sandboxed browser (see hard limit 12 in the repository `AGENTS.md`).
    route of its own: all of its traffic leaves through the WireGuard tunnel in
    the shared network namespace, exactly like every other tool.
 
+## The shared browser
+
+A `browser` sidecar runs Chromium with a real display in the same network
+namespace as the agent, and its **view** is published to the LAN. That is where
+a human does what nothing in this image can do for itself: clear a Cloudflare
+challenge, answer an MFA prompt, use a passkey. `--cdp` attaches to that browser
+instead of launching one, so the commands below act on the session the operator
+built by hand — nothing is exported, copied or replayed, and no cookie leaves the
+namespace.
+
+```bash
+browser --cdp http://127.0.0.1:9222 snapshot     # what the operator left open
+browser --cdp http://127.0.0.1:9222 text "#who"
+browser --cdp http://127.0.0.1:9222 close        # detach; the browser keeps running
+```
+
+What differs from a launched session:
+
+- **`close` detaches and never kills.** That browser holds the operator's logins;
+  ending it is their decision, not this tool's.
+- **The tabs are theirs.** Attach acts on the first page of the browser's default
+  context — the tab they were last in. `open` navigates out from under them, and
+  only one of you can be mid-flow at a time. Coordinate: they solve, you read.
+- **Commands are as active here as anywhere.** `click`, `fill` and `eval` change
+  state in a browser that is already signed in to the target.
+- **`--har` records their traffic too**, because the context is shared. Worth it
+  once, as a record of what they did; noise afterwards. Wrap a short `run` rather
+  than leaving it on.
+- **Do not rotate the exit node while a cleared session is live.** Cloudflare
+  binds a solved challenge to the IP that solved it and rejects a solve from any
+  other, so `POST /switch` mid-session sends the operator back to the challenge.
+  Rotate between sessions, never during one.
+
+The endpoint is loopback inside the shared namespace, and it is deliberately
+neither published nor forwarded. `nothing is answering the DevTools protocol at
+…` means the sidecar is not running — not that the address is wrong.
+
 ## Command reference
 
 Global options. They belong to the invocation, so they go **before** the
@@ -108,6 +148,7 @@ https://host/ --target host` fails with `unrecognized arguments`.
 | `--target HOST` | Authorized host, repeatable. When set, `open` refuses a URL whose host is not the target or a subdomain of it |
 | `--timeout SECONDS` | Per-action timeout, default 30. Becomes Playwright's default timeout for navigation and for every locator action |
 | `--har PATH` | Write a HAR 1.2 file of every response seen during this invocation |
+| `--cdp URL` | Attach to a browser already listening at this DevTools endpoint instead of launching one. The session directory goes unused and the tabs are the operator's. |
 
 | Command | What it does |
 |---|---|
@@ -125,7 +166,7 @@ https://host/ --target host` fails with `unrecognized arguments`.
 | `cookies` | List cookies, or `--clear` them |
 | `storage` | Read or clear web storage |
 | `headers` | Add request headers, scoped to one origin, for this invocation |
-| `close` | Kill the session's browser process and drop `session.json` |
+| `close` | Kill the session's browser process and drop `session.json`; with `--cdp`, detach from the shared browser instead |
 | `run [FILE]` | Read the same commands from `FILE`, or from stdin when no file is given |
 
 Options that belong to a single command:
@@ -291,7 +332,7 @@ token, and a multi-step `run` flow.
 | `cookies` | `<n> cookie(s)`, then one `domain<TAB>name<TAB>value` line per cookie; `cookies cleared` with `--clear` |
 | `storage` | The entries as indented JSON; `<kind> cleared` with `--clear` |
 | `headers` | `applying <header names> to <scheme>://<host>/**` — names only, never values |
-| `close` | `closed` |
+| `close` | `closed`, or `detached (the shared browser belongs to the operator; it was not closed)` with `--cdp` |
 
 Exit codes:
 
@@ -507,6 +548,11 @@ one.
   and leaves Chromium alive, holding the profile and a debugging port. Close the
   session when the workflow is done, or the next engagement's first `open` may
   attach to a browser still holding an authenticated session.
+- **`--cdp` makes the session directory irrelevant.** No pid, no profile and no
+  `chromium.log` are written to it: the state that matters is the sidecar's own
+  profile on the host. A failed attach says so and stops — it never falls back to
+  launching a second browser, because a fresh browser looks exactly like a
+  logged-out target and would be diagnosed as one.
 - **`chromium.log` is opened in append mode** and keeps the browser's stdout and
   stderr, including every DevTools protocol warning. It is the first place to
   look when a launch fails (`chromium exited immediately`), and it is not
