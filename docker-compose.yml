@@ -11,10 +11,12 @@
 #   /home/user/pen/vpn-configs/   WireGuard .conf files, one per exit node (chmod 600)
 #   /home/user/pen/llm-logs/      LLM proxy audit log output
 #   /home/user/pen/dsh-data/      agent workspace / DSH state
+#   /home/user/pen/browser-profile/  interactive browser session state (cookies)
 #
 # These paths live inside the repo checkout on the host; .gitignore is
-# what keeps vpn-configs (private keys) and llm-logs (sensitive
-# request/response bodies) out of commits. Do not remove it.
+# what keeps vpn-configs (private keys), llm-logs (sensitive
+# request/response bodies) and browser-profile (live session cookies) out
+# of commits. Do not remove it.
 
 name: pen
 
@@ -92,6 +94,10 @@ services:
       - "10.0.0.10:3080:3080"
       # code-server, same pattern (forwarder → agent's loopback :8081).
       - "10.0.0.10:3081:3081"
+      # The interactive browser's view, same pattern again (forwarder →
+      # the browser sidecar's loopback :5800). Its DevTools endpoint is
+      # deliberately NOT here: see the browser service below.
+      - "10.0.0.10:3082:3082"
     healthcheck:
       # "Healthy" = kill switch applied and API up (tunnel may still be
       # connecting; the API reports that in /status). No credential, so
@@ -156,6 +162,58 @@ services:
       # Per-tool operator documentation is baked into the image at /tools/
       # (see images/agent/tools/ and the COPY in the agent Dockerfile), so
       # there is no mount for it here.
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Interactive browser: the one place a human solves what automation
+  # cannot — a Cloudflare Managed Challenge, an MFA prompt, a passkey.
+  # It shares the gateway namespace like the agent, so a session it earns
+  # is bound to the exit IP the agent's tools will use, and its own egress
+  # cannot leak either. The agent drives this same browser over the
+  # DevTools protocol on loopback; the human only ever gets the view.
+  # ------------------------------------------------------------------
+  browser:
+    # Off-the-shelf and tag-pinned. Remote debugging is a documented
+    # environment variable in this image rather than a flag smuggled
+    # through an entrypoint; IMPLEMENTATION-V1.md records why it beat the
+    # alternatives.
+    image: jlesage/chromium:v26.09.1
+    container_name: browser
+    # Same namespace as the agent, for the same reason: no route of its
+    # own, so the kill switch is its perimeter too.
+    network_mode: service:vpn-gateway
+    depends_on:
+      vpn-gateway:
+        condition: service_healthy   # never start before the kill switch
+    # Chromium wants more than Docker's 64 MB default /dev/shm, as in the
+    # agent container.
+    shm_size: "1gb"
+    volumes:
+      # The profile is the session: cookies, localStorage, cleared
+      # challenges. Credential material — gitignored, never committed.
+      # The image runs Chromium as uid 1000, so this host directory has to
+      # be writable by that uid.
+      - /home/user/pen/browser-profile:/config
+    environment:
+      # The view answers nothing but loopback, so the scoped socat
+      # forwarder in the gateway namespace is the only way in and iptables
+      # governs it like everything else.
+      - WEB_LOCALHOST_ONLY=1
+      - VNC_LOCALHOST_ONLY=1
+      # A renderer crash should not end the session the human just built.
+      - KEEP_APP_RUNNING=1
+      # DevTools on loopback only — never a published port, never a socat
+      # forwarder. It is unauthenticated control of every cookie this
+      # browser holds (hard limit 14). The agent reaches it across the
+      # shared namespace; nothing outside it may.
+      - CHROMIUM_REMOTE_DEBUGGING=1
+      - CHROMIUM_REMOTE_DEBUGGING_PORT=9222
+      # Unset leaves the view gated by the loopback bind, the forwarder and
+      # iptables alone. RFC 6143 caps a VNC password at 8 characters.
+      - VNC_PASSWORD=${BROWSER_VNC_PASSWORD:-}
+    # No cap_add and no privileged: this image runs Chromium unsandboxed
+    # without them, which is the position hard limit 12 already records
+    # for the agent's browser. SYS_ADMIN is not the price of a sandbox.
     restart: unless-stopped
 
   # ------------------------------------------------------------------

@@ -100,9 +100,10 @@ def free_port():
 class Session:
     """A Chromium process plus the Playwright connection to it."""
 
-    def __init__(self, session, timeout):
+    def __init__(self, session, timeout, cdp=None):
         self.session = session
         self.timeout = timeout
+        self.cdp = cdp
         self.playwright = None
         self.browser = None
         self.context = None
@@ -110,6 +111,8 @@ class Session:
         self.har = None
 
     def ensure_started(self):
+        if self.cdp:
+            return {"endpoint": self.cdp}
         state = read_state(self.session)
         if state and process_alive(state.get("pid")):
             return state
@@ -147,20 +150,34 @@ class Session:
         sync_playwright = load_playwright()
 
         state = self.ensure_started()
-        try:
-            with urllib.request.urlopen(
-                f"http://127.0.0.1:{state['port']}/json/version", timeout=5
-            ) as response:
-                endpoint = json.load(response)["webSocketDebuggerUrl"]
-        except Exception as exc:
-            drop_state(self.session)
-            raise Failure(f"the browser on port {state['port']} stopped answering: {exc}")
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.connect_over_cdp(endpoint)
+        if self.cdp:
+            self.browser = self.attach(state["endpoint"])
+        else:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{state['port']}/json/version", timeout=5
+                ) as response:
+                    endpoint = json.load(response)["webSocketDebuggerUrl"]
+            except Exception as exc:
+                drop_state(self.session)
+                raise Failure(f"the browser on port {state['port']} stopped answering: {exc}")
+            self.browser = self.playwright.chromium.connect_over_cdp(endpoint)
         self.context = self.browser.contexts[0] if self.browser.contexts else self.browser.new_context()
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         self.page.set_default_timeout(self.timeout * 1000)
         return self
+
+    def attach(self, endpoint):
+        """Connect to a browser this invocation did not launch."""
+        try:
+            # no_defaults leaves the browser's own download and media settings
+            # alone, which is what "someone is sitting in front of it" means.
+            return self.playwright.chromium.connect_over_cdp(endpoint, no_defaults=True)
+        except Exception as exc:
+            raise Failure(
+                f"nothing is answering the DevTools protocol at {endpoint}: {exc}"
+            ) from None
 
     def record_har(self, path):
         self.har = HarRecorder(path)
@@ -542,6 +559,9 @@ class Commands:
 
     def close(self):
         self.session.close()
+        if self.session.cdp:
+            print("detached (the shared browser belongs to the operator; it was not closed)")
+            return
         self.session.kill()
         print("closed")
 
@@ -569,7 +589,7 @@ COMMAND_HELP = {
     "cookies": "list or clear cookies",
     "storage": "read or clear web storage",
     "headers": "add headers to matching requests",
-    "close": "kill the session's browser",
+    "close": "kill the session's browser, or detach when attached with --cdp",
 }
 
 
@@ -584,6 +604,12 @@ def build_parser():
     )
     parser.add_argument("--timeout", type=int, default=30, help="per-action timeout in seconds")
     parser.add_argument("--har", metavar="PATH", help="write every response to a HAR file")
+    parser.add_argument(
+        "--cdp",
+        metavar="URL",
+        help="attach to a browser already listening at this DevTools endpoint "
+        "instead of launching one; the session directory then goes unused",
+    )
     commands = parser.add_subparsers(dest="command")
 
     run = commands.add_parser("run", help="read commands from a file or stdin")
@@ -665,7 +691,7 @@ def main(argv):
     if not args.command:
         build_parser().print_help()
         return 2
-    session = Session(args.session, args.timeout)
+    session = Session(args.session, args.timeout, args.cdp)
     try:
         if args.command == "run":
             lines = (

@@ -110,6 +110,12 @@ Before this, three tools documented a headless capability that no one had ever
 exercised; the shared libraries were installed and the browser was assumed. The
 replacement is a pinned browser plus a documented `-sc` path for each consumer.
 
+It has since grown the one capability no other tool here has: `--cdp` attaches it
+to a browser it did not launch. That is how the agent continues a session a human
+cleared by hand in the `browser` sidecar, instead of trying to move the session's
+cookies into a different browser — Cloudflare documents that a Managed Challenge
+solved from a different IP than the one it was issued to is not a valid solve.
+
 `chrome-devtools-mcp` was rejected: Google documents root as unsupported, its
 `--headless` defaults to false, and it reports usage statistics and may send
 trace URLs to a third-party API by default — an egress path a fail-closed
@@ -211,9 +217,14 @@ target, and it needs version pinning and operator documentation.
 
 - **Wireless tooling** (`aircrack-ng`, `kismet`): needs a radio, and the
   container has none.
-- **A browser with a visible UI, or a virtual display** (Xvfb, a desktop
-  Chromium): everything here is headless, and a screenshot is a file, not a
-  window. `tools/browser` covers the headless case.
+- **A browser with a visible UI *in this image*** (Xvfb, a desktop Chromium):
+  the agent's browser is headless because a screenshot is a file, not a window,
+  and `tools/browser` covers that case. The one thing headless cannot do is put
+  a page in front of a human mid-flow — a Cloudflare challenge, an MFA prompt, a
+  passkey — so that capability landed as a separate `browser` sidecar in the
+  compose file rather than as another package here. The agent reaches it on
+  loopback with `browser --cdp`, so the session a human cleared is the session
+  the tools then use. See the decision table in `DESIGN.md` and hard limit 14.
 - **Anything requiring a Docker socket.** There is none, deliberately: trivy
   scans images over the network or from a tar, and `rootfs /` covers this
   container.

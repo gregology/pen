@@ -44,10 +44,12 @@ done
 iptables -A INPUT -p tcp --dport "$API_PORT" -s "$SANDBOX_CIDR" -j ACCEPT
 iptables -A INPUT -p tcp --dport "$API_PORT" -j DROP
 
-# The forwarded web UIs (dsh :3080, code-server :3081) answer the LAN —
-# Docker DNAT preserves the real client source IP — plus the host via
-# either bridge and the sandbox, and never the tunnel.
-for port in 3080 3081; do
+# The forwarded web UIs (dsh :3080, code-server :3081, the interactive
+# browser's view :3082) answer the LAN — Docker DNAT preserves the real
+# client source IP — plus the host via either bridge and the sandbox, and
+# never the tunnel. The browser's DevTools port is absent deliberately: it
+# is never forwarded, so no rule here should ever reach it.
+for port in 3080 3081 3082; do
     iptables -A INPUT -p tcp --dport "$port" -s "$SANDBOX_CIDR" -j ACCEPT
     iptables -A INPUT -p tcp --dport "$port" -s "$EGRESS_CIDR" -j ACCEPT
     iptables -A INPUT -p tcp --dport "$port" -s "$LAN_CIDR" -j ACCEPT

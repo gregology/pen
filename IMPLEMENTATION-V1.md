@@ -1,6 +1,6 @@
 # V1 Implementation Plan
 
-Implements the architecture in `DESIGN.md`: three containers (agent,
+Implements the architecture in `DESIGN.md`: four containers (agent, browser,
 vpn-gateway, llm-proxy) deployed as a **Portainer stack** from this Git repo.
 
 ## Why these implementation choices
@@ -34,6 +34,22 @@ vpn-gateway, llm-proxy) deployed as a **Portainer stack** from this Git repo.
   built on the host from `/home/user/pen/images/*` and referenced by tag
   with `pull_policy: never`. Secrets live in Portainer stack environment
   variables, never in the repo.
+- **An off-the-shelf image for the interactive browser, pinned by tag.** The
+  `browser` sidecar runs `jlesage/chromium` at a calendar-version tag. It was
+  chosen because remote debugging is a documented first-class environment
+  variable there rather than a flag smuggled through an entrypoint, it needs no
+  capability beyond the defaults, it is multi-arch, and its own documentation
+  states the same unsandboxed position hard limit 12 already records. Building
+  the X server, window manager, VNC server and a second Chromium ourselves would
+  add a large maintenance surface for no containment gain, since containment
+  here comes from `network_mode: service:vpn-gateway`, exactly as it does for the
+  agent. Rejected alternatives, recorded so they are not rediscovered: Kasm
+  Workspaces images (the community edition's licence excludes revenue-generating
+  use), browserless (SSPL-or-commercial, and its interactive live takeover is
+  Enterprise-gated), neko (no CDP at all, and it defaults to port 8080 — the
+  gateway's control API), every Firefox-based image (Firefox 141 removed CDP, and
+  Camoufox has no human-viewable display), and `browser-use/web-ui` (asks for
+  `SYS_ADMIN`, which hard limit 11 forbids).
 
 ## Repo layout
 
@@ -284,6 +300,10 @@ Each test maps to a design guarantee:
 | Browser is reachable by the tools that expect one | `command -v chromium` resolves `/usr/local/bin/chromium`, and `katana -u <fixture> -hl -sc -d 1 -duc` returns URLs from a page whose links are added by script. Without `-sc` katana silently downloads its own Chromium instead, so the flag is part of the test. |
 | Screenshot path produces an image | `httpx -u <fixture> -ss -system-chrome -duc -json -o /tmp/s.json`, then confirm the stored screenshot is a non-empty PNG. This row exists because the previous image documented screenshot flags that had never once been run. |
 | Browser sandbox status is known, not assumed | `bash /tools/browser/sandbox-experiment.sh` exits 0 (sandbox available under a dropped uid) or 1 (it is not). Either answer is acceptable; an unrecorded answer is not, because it is the difference between a renderer isolated from the agent and a renderer that is not. |
+| Interactive browser egress is the tunnel | With the tunnel up, the exit IP the browser view sees equals the agent's (`curl https://ifconfig.me` from the agent, and the same URL in the view); with the tunnel down (`ip link set wg0 down`), a page load in the view fails. The sidecar has no route of its own, and this row is what proves that rather than reading it off the compose file. |
+| The DevTools endpoint is not reachable off loopback | `curl -fsS http://127.0.0.1:9222/json/version` from the agent answers with the browser; the same request from a LAN host to `10.0.0.10:9222` must fail, and `docker port browser` must print nothing. This catches an accidentally published CDP port, which is unauthenticated control of a browser holding live logins. |
+| The browser view is a LAN control surface | From a LAN host, `http://10.0.0.10:3082` serves the noVNC page; from the egress network the same port is dropped, matching the GUI rows above. A view that answers the tunnel is a second way in. |
+| The agent drives the session the human cleared | Log in by hand in the view, then `browser --cdp http://127.0.0.1:9222 text` returns the authenticated page, and `browser --cdp … close` reports that it detached without killing the browser. This is the capability the whole sidecar exists for, and it fails if the attach path quietly launches a fresh browser instead. |
 
 ### Re-verified after the toolchain deploy — 2026-09-17 (all pass)
 
