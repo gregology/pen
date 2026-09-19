@@ -77,8 +77,10 @@ Why each flag is there:
 
 - `-f/--file` is the input list; `-` would read stdin instead.
 - `-t 4` keeps four browser threads, not the default six; `-T 20` caps a page at
-  20 s; `--delay 3` is the default but is written down because it is what makes
-  the runtime predictable — a 500-host list is at least 25 minutes.
+  20 s; `--delay 3` is the default but is written down because the delay is paid
+  per probe and spread across threads — a 500-host list at `-t 4 --delay 3` is
+  at least six minutes of waiting alone, and the same list at `-t 1` is at least
+  twenty-five.
 - `--write-jsonl` plus `--write-jsonl-file` is the record. Without a writer the
   run saves screenshots only and there is nothing to `jq`.
 

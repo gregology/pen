@@ -23,7 +23,8 @@ scripted `run` reach the same browser.
 | | |
 |---|---|
 | Version | Playwright **1.63.0**; browser **Chromium 153.0.8010.12**, `chromium-headless-shell`, revision **1243** |
-| Command | `/usr/local/bin/browser` → `/opt/browser/browser`, a Python script whose shebang is `#!/usr/bin/env python3` |
+| Command | `/usr/local/bin/browser` → `/opt/browser/browser`. The installer rewrites the script's first line to `#!/opt/venvs/browser/bin/python3` and verifies it, so the command always runs under the interpreter its Playwright was installed into — bare `python3` in this image is `/opt/py` and has no Playwright |
+| Chromium on `PATH` | `/usr/local/bin/chromium` → Playwright's `chrome-headless-shell` under `/opt/ms-playwright`. One symlink, for the go-rod tools: `launcher.LookPath()` searches `PATH` for a binary named `chromium`, so `katana -hl -sc` and `httpx -ss -system-chrome` use this pinned browser instead of downloading their own |
 | Playwright venv | `/opt/venvs/browser` |
 | Browser binaries | `/opt/ms-playwright`, baked at image build time by `playwright install --only-shell chromium` (≈114 MB, the headless shell rather than the full 187 MB browser). The tool sets `PLAYWRIGHT_BROWSERS_PATH` itself, so nothing needs exporting |
 | Session directory | `$WORK/browser-session`, or `--session DIR`. Holds `session.json` (the browser's pid, debugging port and start time — not cookies), `profile/` (Chromium's `--user-data-dir`) and `chromium.log` (the browser's stdout and stderr, appended) |
@@ -389,7 +390,10 @@ jq -r '.log.entries[].response.content.text // empty' "$WORK/har/spa.har" \
 `katana -hl` crawls with a real engine but reports URLs. `browser` is what you
 use when you need the DOM *state* — a ref to click, the value a sink produced, a
 screenshot for the report. Run `katana` first to get the surface, then `browser`
-on the pages where the behaviour matters.
+on the pages where the behaviour matters. Both render with the same pinned
+browser: `/usr/local/bin/chromium` is the link go-rod resolves, so `katana -hl
+-sc` and `httpx -ss -system-chrome` use this Chromium rather than downloading a
+second one at engagement time.
 
 `mitmproxy` pairs with it as the rewrite half of the pair, with one limitation
 to be explicit about: **`browser` cannot be pointed at an interception proxy.**
@@ -506,13 +510,14 @@ one.
   stderr, including every DevTools protocol warning. It is the first place to
   look when a launch fails (`chromium exited immediately`), and it is not
   rotation-managed.
-- **If every command fails with `browser: ModuleNotFoundError: No module named
-  'playwright'`, suspect the interpreter, not the target.** The entry point is a
-  script whose shebang is `/usr/bin/env python3`, and Playwright lives in
-  `/opt/venvs/browser` — not in the general-purpose `/opt/py` that `python3`
-  resolves to. Invoke it through the venv
-  (`/opt/venvs/browser/bin/python3 /opt/browser/browser …`) and report the
-  mismatch rather than reinstalling anything.
+- **Run `/usr/local/bin/browser`, not a copy of the source.** The repository's
+  `browser` starts with `#!/usr/bin/env python3`, and `python3` in this image is
+  `/opt/py`, which has no Playwright; the installer rewrites that line to
+  `/opt/venvs/browser/bin/python3` in the installed file. A copy made from the
+  repo (`cp tools/browser/browser /tmp/b`) fails with `browser:
+  ModuleNotFoundError: No module named 'playwright'`, which looks like a broken
+  tool rather than a wrong interpreter — run it as
+  `/opt/venvs/browser/bin/python3 <path>` if you need a modified copy.
 
 ## Safety and scope
 

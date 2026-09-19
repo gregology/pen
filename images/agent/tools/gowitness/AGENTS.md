@@ -42,8 +42,9 @@ Every flag below is from the pinned 3.2.0 command definitions.
   Pass `--write-jsonl`, `--write-csv` or `--write-db` (or `--write-stdout`) on
   every run you intend to report from.
 - **Bound the run.** `-t/--threads`, `-T/--timeout` and `--delay` are the only
-  limits: a scan is a browser render per URL, so a 1,000-host list at the
-  default 3 s delay is at least 50 minutes of wall clock before failures.
+  limits: every URL is a browser render, and the default `--delay 3` is spent
+  per probe, spread across the threads. At `-t 1` a 1,000-host list is at least
+  50 minutes of deliberate waiting before any page load time.
 - **A screenshot is as loud as a crawl.** Each page load pulls its subresources
   and runs its scripts. Confirm the target list before the run, not after.
 - **The browser download is the one remaining runtime browser download in the
@@ -147,7 +148,7 @@ and other non-HTTP services. Filter with `--service-contains http` or `--port`.
 | `list` | `--db-uri`, `--json-file` (takes precedence) |
 | `convert` | `--from-file`, `--to-file`; the extensions (`.sqlite3`, `.jsonl`) choose the direction |
 | `merge` | `--source-file` (repeatable), `--source-path`, `--output-file` |
-| `migrate` | `-s, --source <file>`; writes `<source>.v3-migrated.sqlite3` next to it |
+| `migrate` | `-s, --source <file>`; writes a new `<name>.v3-migrated.sqlite3` beside it, the old extension replaced |
 | `server` | `--host` (default `127.0.0.1`), `--port` (default 7171), `--db-uri`, `--screenshot-path` |
 
 ### Global flags
@@ -309,9 +310,12 @@ the wrong tool for a single `HEAD`-style liveness check — that is `httpx`.
 - **A failed render is not a missing page.** Check `.failed`/`.failed_reason`
   in the JSONL, or add `--log-scan-errors`, before reporting a host as dead.
   `-D/--debug-log` also enables scan-error logging.
-- **The default delay dominates the runtime.** `--delay 3` per URL plus up to
-  `-T 60` of timeout is the floor for a large list: a 500-host scan is at least
-  25 minutes even when every page loads instantly.
+- **`--delay` is per probe, not per run.** The default 3 s is spent between
+  navigation and screenshotting for every URL and is spread across `-t`
+  threads: 1,000 hosts at the default `-t 6 --delay 3` is at least eight
+  minutes of waiting alone, and the same list at `-t 1` is at least fifty. A
+  page that hits `-T` (60 s by default) also holds its thread for the full
+  timeout.
 - **`--http-code-filter` filters screenshots, not just records** — it is the
   list of response codes to screenshot. Setting it to `200` means a 403 admin
   panel is never captured.
