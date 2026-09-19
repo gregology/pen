@@ -50,6 +50,23 @@ vpn-gateway, llm-proxy) deployed as a **Portainer stack** from this Git repo.
   gateway's control API), every Firefox-based image (Firefox 141 removed CDP, and
   Camoufox has no human-viewable display), and `browser-use/web-ui` (asks for
   `SYS_ADMIN`, which hard limit 11 forbids).
+- **What that image does not ship, and why it is installed at startup for now.**
+  Alpine splits Chromium's software rendering into separate packages —
+  `chromium-swiftshader` (the Vulkan ICD) and `chromium-angle` (the GL
+  libraries) — and this image installs only the browser. A container with no
+  `/dev/dri` therefore has no rendering fallback at all, and a challenge widget
+  that fingerprints through canvas and WebGL dies in the renderer: observed as
+  a deterministic crash ~1s into hCaptcha's proof-of-work module, with
+  `libvk_swiftshader.so: No such file or directory` in the Chromium log and
+  crashpad unable to write a dump because the container's seccomp profile
+  blocks `sched_getscheduler`. `INSTALL_PACKAGES` is the image's own documented
+  hook and is what the compose file uses, but it runs on every container start
+  and needs the tunnel and DNS up at that moment — the runtime-download
+  dependency this repository rejected once already. The intended end state is a
+  derived image with those packages baked, which is also where a Chromium
+  version pin would live; the sidecar is on Alpine's 152 while the agent's
+  browser is Playwright's 153, and Alpine's branch has no 153 at all, so
+  aligning them is a change of provenance rather than a version bump.
 
 ## Repo layout
 
@@ -301,9 +318,10 @@ Each test maps to a design guarantee:
 | Screenshot path produces an image | `httpx -u <fixture> -ss -system-chrome -duc -json -o /tmp/s.json`, then confirm the stored screenshot is a non-empty PNG. This row exists because the previous image documented screenshot flags that had never once been run. |
 | Browser sandbox status is known, not assumed | `bash /tools/browser/sandbox-experiment.sh` exits 0 (sandbox available under a dropped uid) or 1 (it is not). Either answer is acceptable; an unrecorded answer is not, because it is the difference between a renderer isolated from the agent and a renderer that is not. |
 | Interactive browser egress is the tunnel | With the tunnel up, the exit IP the browser view sees equals the agent's (`curl https://ifconfig.me` from the agent, and the same URL in the view); with the tunnel down (`ip link set wg0 down`), a page load in the view fails. The sidecar has no route of its own, and this row is what proves that rather than reading it off the compose file. |
-| The DevTools endpoint is not reachable off loopback | `curl -fsS http://127.0.0.1:9222/json/version` from the agent answers with the browser; the same request from a LAN host to `10.0.0.10:9222` must fail, and `docker port browser` must print nothing. This catches an accidentally published CDP port, which is unauthenticated control of a browser holding live logins. |
+| The DevTools endpoint is not reachable off loopback | From the namespace, `ss -ltn` shows Chromium's CDP on `127.0.0.1:9224` and **nothing** listening on 9222; `curl -fsS http://127.0.0.1:9224/json/version` answers from the agent, the same request from a LAN host to `10.0.0.10:9224` must fail, `docker port browser` must print nothing, and the same request from llm-proxy to the gateway's sandbox address must fail. The image's own forwarder is what made this false once, so the 9222 line is the part of the row that carries the guarantee. |
 | The browser view is a LAN control surface | From a LAN host, `http://10.0.0.10:3082` serves the noVNC page; from the egress network the same port is dropped, matching the GUI rows above. A view that answers the tunnel is a second way in. |
-| The agent drives the session the human cleared | Log in by hand in the view, then `browser --cdp http://127.0.0.1:9222 text` returns the authenticated page, and `browser --cdp … close` reports that it detached without killing the browser. This is the capability the whole sidecar exists for, and it fails if the attach path quietly launches a fresh browser instead. |
+| The agent drives the session the human cleared | Log in by hand in the view, then `browser --cdp http://127.0.0.1:9224 text` returns the authenticated page, and `browser --cdp … close` reports that it detached without killing the browser. This is the capability the whole sidecar exists for, and it fails if the attach path quietly launches a fresh browser instead. |
+| The sidecar can render a challenge widget | From the agent: `browser --cdp http://127.0.0.1:9224 eval "(()=>{const c=document.createElement('canvas');return {webgl:!!c.getContext('webgl'),webgl2:!!c.getContext('webgl2')}})()"` returns true, and an hCaptcha-protected page completes rather than losing its frame. When it does die, `/home/user/pen/browser-profile/log/chromium/error.log` carries `Renderer process exited unexpectedly: termination status N`, and N names the cause — but only with `--enable-logging=stderr --v=1`, because crashpad is degraded under this container's seccomp profile. This row exists because the image shipped without Alpine's rendering subpackages and nothing in the platform noticed. |
 
 ### Re-verified after the toolchain deploy — 2026-09-17 (all pass)
 
