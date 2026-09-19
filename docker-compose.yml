@@ -222,8 +222,12 @@ services:
       # The agent attaches with Playwright, which sends an Origin header
       # recent Chromium rejects without the first flag. The rest stop the
       # browser's own chatter to Google, which the agent's browser disables
-      # too and which has no business leaving this namespace.
-      - CHROMIUM_CUSTOM_ARGS=--remote-debugging-port=9224 --remote-allow-origins=* --disable-background-networking --disable-sync --disable-component-update
+      # too and which has no business leaving this namespace. The last two
+      # are diagnostics for the hCaptcha renderer crash that is still open:
+      # `--v=1` is what makes the renderer's exit reason reach the log, and
+      # `--no-wasm-tier-up` tests the leading hypothesis. Both come out once
+      # HCAPTCHA-FINDINGS.md has its answer.
+      - CHROMIUM_CUSTOM_ARGS=--remote-debugging-port=9224 --remote-allow-origins=* --disable-background-networking --disable-sync --disable-component-update --enable-logging=stderr --v=1 --js-flags=--no-wasm-tier-up
       # Unset leaves the view gated by the loopback bind, the forwarder and
       # iptables alone. RFC 6143 caps a VNC password at 8 characters.
       - VNC_PASSWORD=${BROWSER_VNC_PASSWORD:-}
