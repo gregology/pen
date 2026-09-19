@@ -17,8 +17,9 @@ list of URLs that `nuclei`, `ffuf` and `dalfox` actually test.
 | Output | stdout, or `-o <file>`; `-srd` for stored responses |
 
 Katana is stateless between runs apart from the resume file and whatever
-`-sr`/`-sfd` write to disk. Headless mode downloads its own Chromium on first
-use (see *Limits*). Non-headless crawling needs no browser.
+`-sr`/`-sfd` write to disk. Non-headless crawling needs no browser.
+Headless crawling uses the Chromium that `tools/browser` installs, which
+`-sc` selects; see *Limits*.
 
 ```bash
 katana -version -duc     # "Current version: v1.7.0"
@@ -136,8 +137,8 @@ Every flag below is from `katana -h` on 1.7.0.
 |---|---|
 | `-hl, -headless` | Enable headless crawling (experimental). |
 | `-hh, -hybrid` | Headless hybrid crawling (experimental). |
-| `-sc, -system-chrome` | Use a locally installed Chrome instead of the bundled one. |
-| `-scp, -system-chrome-path <path>` | Path to that Chrome binary. |
+| `-sc, -system-chrome` | Use the browser already on `PATH` (go-rod resolves it via `LookPath()`, which finds `/usr/local/bin/chromium` from `tools/browser`) instead of downloading one. |
+| `-scp, -system-chrome-path <path>` | Path to that Chrome binary. UNVERIFIED: this spelling is what the 1.7.0 docs record, but `-sc` alone is what the installed binary resolves through `PATH`, and that is the form the examples here use. |
 | `-cwu, -chrome-ws-url <url>` | Use a Chrome instance launched elsewhere. |
 | `-cdd, -chrome-data-dir <dir>` | Where to store Chrome profile data. |
 | `-nos, -no-sandbox` | Run Chrome with `--no-sandbox`. |
@@ -322,16 +323,29 @@ katana -u "$TARGET" -d 3 -silent -duc \
 
 ## Limits, failure modes and gotchas
 
-- **Headless crawling needs egress on first use.** `-hl`/`-hh` download a
-  Chromium build via go-rod from `storage.googleapis.com` into
-  `/root/.cache/rod/browser/chromium-<rev>` (about 150 MB), then launch it. The
-  shared libraries Chromium links against are installed by
-  `tools/katana/install.sh`, so the downloaded browser runs; the download is
-  the only network dependency, and the browser is cached for later runs.
+- **Headless crawling needs `-sc` to use the installed browser.** `-hl`/`-hh`
+  without `-sc` make katana download its own Chromium through go-rod from
+  `storage.googleapis.com` into `/root/.cache/rod/browser/chromium-<rev>`
+  (about 181 MB) and use that instead. With `-sc`, go-rod's
+  `launcher.LookPath()` finds the image's pinned `/usr/local/bin/chromium`
+  (installed by `tools/browser`) and no download happens:
+
+  ```bash
+  katana -u "$TARGET" -hl -sc -d 2 -ct 5m -duc -jsonl -o "$WORK/katana-headless.jsonl"
+  ```
+
+  Without `-sc` the download needs the tunnel up on first use, and
+  `/root/.cache` is not a volume, so a container recreate repeats it. Passing
+  `-sc` when no browser is on `PATH` fails loudly with
+  `the chrome browser is not installed`; it never silently falls back to a
+  download.
 - **`-hl` is labelled experimental upstream.** A headless crawl that exits 0
   with `Crawl completed in 1s. 0 endpoints found.` is not evidence that the
   target has no URLs. `-jc` (non-headless JS parsing) needs no browser and is
-  the safer baseline.
+  the safer baseline. Verified failure mode: on a fixture that does render
+  client-side routes, an `-hl` run without `-sc` found zero endpoints, so
+  treat a zero-resolution headless crawl as suspect until a known-rendering
+  page crawls correctly.
 - **The output flag is `-jsonl`, not `-json`.** `katana -json` fails with
   `flag provided but not defined: -json`. This differs from httpx, where
   `-json` is correct.
@@ -377,7 +391,8 @@ Requires explicit human confirmation before running:
 - `-aff` (form submission), `-kb-validate-secrets` (live third-party API
   calls), and `-al` (automatic login).
 - Headless mode (`-hl`, `-hh`), which needs a browser and executes page
-  JavaScript.
+  JavaScript. Run it with `-sc` so it uses the image's pinned browser rather
+  than downloading its own.
 - Raising `-c`, `-p` or `-rl` above the conservative defaults on a target that
   is not Greg's.
 - Crawls without a duration bound (`-ct`) or depth bound (`-d`) on a site whose

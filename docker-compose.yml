@@ -120,6 +120,12 @@ services:
     # entrypoint makes everything written under /working group-writable
     # for Greg's host user, so the shared directory needs no sudo.
     user: "0:1000"
+    # Chromium wants more than Docker's 64 MB default /dev/shm or it can
+    # crash mid-render. The alternative, passing --disable-dev-shm-usage,
+    # routes the same allocations through /tmp instead; both are preferable
+    # to `ipc: host`, which would share the host's IPC namespace with this
+    # container to solve a memory-tuning problem.
+    shm_size: "1gb"
     depends_on:
       vpn-gateway:
         condition: service_healthy   # never start before the kill switch

@@ -145,6 +145,7 @@ Every flag below is from `nuclei -h` on 3.11.1.
 | `-lna, -restrict-local-network-access` | off | Block connections to local/private networks. |
 | `-ni, -no-interactsh` | off | Disable interactsh (OAST) templates and server registration. |
 | `-headless` | off | Enable templates needing a headless browser. |
+| `-sc, -system-chrome` | off | Use the browser already on `PATH` (the pinned `/usr/local/bin/chromium` from `tools/browser`) rather than downloading one. |
 | `-passive` | off | Passive HTTP response processing mode. |
 | `-proxy, -p <url>` | | Proxy. Not needed here; the tunnel is the egress. |
 | `-rlm, -rate-limit-minute <n>` | | Marked DEPRECATED in `-h`; use `-rl`. |
@@ -378,12 +379,23 @@ subfinder -d "$DOMAIN" -silent -duc \
   except noise". `-severity` and `-tags` combine as AND, not OR.
 - **DAST templates do not run unless `-dast` is given.** A template tagged
   `fuzz` produces nothing without it.
-- **Headless templates need a Chromium download on first use.** `-headless`
-  needs a Chrome/Chromium binary and none is baked into the image. The
-  Chromium that katana and httpx download at runtime (about 150 MB from
-  `storage.googleapis.com`, needs egress) does launch here. The failure mode to
-  watch for is a headless template set that produces nothing because the
-  download could not happen, not a missing shared library.
+- **Headless templates need `-sc`, which uses the browser in the image.** The
+  image carries a pinned Chromium at `/usr/local/bin/chromium` (installed by
+  `tools/browser`). Pass `-sc` and go-rod's `launcher.LookPath()` resolves it:
+
+  ```bash
+  nuclei -u "$TARGET" -headless -sc -ni -rl 25 -c 10 -silent -jsonl -duc \
+    -o "$WORK/nuclei-headless.jsonl"
+  ```
+
+  Without `-sc` nuclei downloads its own Chromium at first use, which needs the
+  tunnel up and is lost on container recreate. With `-sc` and no browser on
+  `PATH` it fails loudly with `the chrome browser is not installed`. Either
+  way, the failure mode to watch for is a headless template set that produces
+  nothing — an empty result is not evidence that the target is clean. Unlike
+  the other browser-dependent paths in this toolchain, headless templates have
+  **not been exercised on a built image**; the first run should be against a
+  page known to render client-side.
 - **`-etags` removes a template silently, and the error is indistinguishable
   from having no templates.** Verified: a template with `tags: local` loads and
   runs normally in 3.11.1, but `nuclei -t <that file> -etags local` aborts with

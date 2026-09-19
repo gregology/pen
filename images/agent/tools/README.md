@@ -27,9 +27,15 @@ tools/
     install.sh                required — version pin, install, verification
     AGENTS.md                 required — operator documentation
     EXAMPLES.md               optional — worked multi-step workflows
+    <runtime files>           optional — a tool that ships a script of its own
   README.md                   this file
   TOOL_RESEARCHING.md         selection criteria and capability coverage
 ```
+
+Only `browser` carries runtime files of its own today: the `browser` command
+and `sandbox-experiment.sh`, a diagnostic the operator runs in the container.
+The Dockerfile places them explicitly, because the single documentation `COPY`
+would put a script somewhere the tool does not expect it.
 
 `_lib/install.sh.template` is a template, not a tool: it has no `install.sh`
 of its own and is never run. Like the installers, it does not reach the container.
@@ -291,12 +297,28 @@ not optional. The flag fails in two different ways and only one is loud:
 - If BuildKit cannot resolve the pinned frontend, the build errors.
 - **If the pattern does not match anything, the COPY succeeds and ships every
   installer into the runtime image with no warning.** Verified on host01: a
-  bare `--exclude=install.sh` removed none of the 32 installers, and
-  `--exclude=**/install.sh` removed all 32. The pattern must be recursive; the
+  bare `--exclude=install.sh` removed none of the 40 installers, and
+  `--exclude=**/install.sh` removed all 40. The pattern must be recursive; the
   trailing `*` in the COPY is what covers `install.sh.template` too.
 
 Run the `find` after any change to that COPY line, and compare the count of
-`AGENTS.md` files (32) against the tool directory count.
+`AGENTS.md` files (40) against the tool directory count. The COPY ships 61 files
+in total: 40 `AGENTS.md`, 17 `EXAMPLES.md`, the two top-level documents, and the
+two runtime files in `browser/`. Re-derive that number rather than trusting it —
+`_lib/install-helpers.sh` is not among them, because the Dockerfile copies it to
+`/tmp` and the installers that use it never reach the image.
+
+`browser/sandbox-experiment.sh` is deliberately among them. It is not an
+installer and not documentation: it is a diagnostic an operator runs inside the
+container to answer one question — whether Chromium's own sandbox can run under
+a dropped uid on this host. It ships for the same reason the tools do, because
+the answer is needed during an engagement rather than at build time.
+
+There is no `.dockerignore` in this build context, so anything left beside a
+tool's files is copied into the image. A `__pycache__` from running a tool's
+script locally during development ships to `/tools/` like everything else;
+delete it before building.
+
 
 ## Conventions these docs follow
 

@@ -1,0 +1,678 @@
+#!/usr/bin/env python3
+"""Drive a headless Chromium for client-side testing.
+
+The browser is launched once and kept alive, so a sequence of commands acts
+on one session: cookies, localStorage and a signed-in state survive between
+them. One-shot use and scripted use reach the same browser.
+
+    browser open https://target/ --target target
+    browser snapshot
+    browser fill @1a2b3c "admin"
+    browser click @4d5e6f
+    browser screenshot
+    browser close
+
+`browser run <file>` reads the same commands from a file or stdin, which is
+the form to use for a multi-step flow: one process instead of six.
+"""
+
+import argparse
+import json
+import os
+import re
+import shlex
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+BROWSERS_PATH = "/opt/ms-playwright"
+WORK = os.environ.get("WORK", "/working")
+DEFAULT_SESSION = os.path.join(WORK, "browser-session")
+
+CHROMIUM_FLAGS = [
+    # Chromium aborts at zygote init when it runs as root with its sandbox
+    # enabled, and this container cannot create the user namespaces the
+    # sandbox needs. Engine isolation on this platform is the network
+    # topology, not the browser's own sandbox.
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-sync",
+    "--password-store=basic",
+    "--window-size=1280,1024",
+]
+
+
+class Failure(Exception):
+    """An error worth showing the operator verbatim."""
+
+
+def profile_dir(session):
+    return os.path.join(session, "profile")
+
+
+def state_path(session):
+    return os.path.join(session, "session.json")
+
+
+def read_state(session):
+    try:
+        with open(state_path(session)) as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def write_state(session, state):
+    os.makedirs(session, exist_ok=True)
+    temporary = state_path(session) + ".tmp"
+    with open(temporary, "w") as handle:
+        json.dump(state, handle)
+    os.replace(temporary, state_path(session))
+
+
+def process_alive(pid):
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+class Session:
+    """A Chromium process plus the Playwright connection to it."""
+
+    def __init__(self, session, timeout):
+        self.session = session
+        self.timeout = timeout
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.har = None
+
+    def ensure_started(self):
+        state = read_state(self.session)
+        if state and process_alive(state.get("pid")):
+            return state
+        if state:
+            drop_state(self.session)
+        return self.launch()
+
+    def launch(self):
+        executable = browser_executable()
+        port = free_port()
+        os.makedirs(profile_dir(self.session), exist_ok=True)
+        log_path = os.path.join(self.session, "chromium.log")
+        log = open(log_path, "a")
+        process = subprocess.Popen(
+            [
+                executable,
+                f"--remote-debugging-port={port}",
+                # Playwright's CDP client sends an Origin header that
+                # Chromium rejects by default on recent versions.
+                "--remote-allow-origins=*",
+                f"--user-data-dir={profile_dir(self.session)}",
+                *CHROMIUM_FLAGS,
+                "about:blank",
+            ],
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+        )
+        wait_for_endpoint(port, process)
+        state = {"pid": process.pid, "port": port, "started": time.time()}
+        write_state(self.session, state)
+        return state
+
+    def connect(self):
+        sync_playwright = load_playwright()
+
+        state = self.ensure_started()
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{state['port']}/json/version", timeout=5
+            ) as response:
+                endpoint = json.load(response)["webSocketDebuggerUrl"]
+        except Exception as exc:
+            drop_state(self.session)
+            raise Failure(f"the browser on port {state['port']} stopped answering: {exc}")
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.connect_over_cdp(endpoint)
+        self.context = self.browser.contexts[0] if self.browser.contexts else self.browser.new_context()
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+        self.page.set_default_timeout(self.timeout * 1000)
+        return self
+
+    def record_har(self, path):
+        self.har = HarRecorder(path)
+        self.context.on("response", self.har.on_response)
+        self.context.on("requestfailed", self.har.on_failure)
+
+    def close(self):
+        if self.har:
+            self.har.write()
+        if self.playwright:
+            self.playwright.stop()
+        self.playwright = self.browser = self.context = self.page = None
+
+    def kill(self):
+        state = read_state(self.session)
+        if state and process_alive(state.get("pid")):
+            try:
+                os.killpg(os.getpgid(state["pid"]), signal.SIGTERM)
+            except OSError:
+                pass
+        drop_state(self.session)
+
+
+def browser_executable():
+    sync_playwright = load_playwright()
+
+    with sync_playwright() as playwright:
+        path = playwright.chromium.executable_path
+    if not os.path.exists(path):
+        raise Failure(
+            f"no browser binary at {path} — the image was built without "
+            "`playwright install --only-shell chromium`"
+        )
+    return path
+
+
+def load_playwright():
+    """Import Playwright, or explain which piece of the image is missing."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise Failure(
+            f"{exc}; this script needs the Playwright in /opt/venvs/browser, so "
+            "run it from the image rather than by hand"
+        ) from None
+    return sync_playwright
+
+
+def wait_for_endpoint(port, process, timeout=30):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if process.poll() is not None:
+            raise Failure(
+                f"chromium exited immediately (status {process.returncode}); "
+                "see the session's chromium.log"
+            )
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2):
+                return
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.2)
+    process.kill()
+    raise Failure(f"chromium did not open a debugging port within {timeout}s")
+
+
+def drop_state(session):
+    try:
+        os.remove(state_path(session))
+    except OSError:
+        pass
+
+
+class HarRecorder:
+    """Collect responses into a HAR 1.2 file, written when the run ends."""
+
+    def __init__(self, path):
+        self.path = path
+        self.entries = []
+
+    def on_response(self, response):
+        try:
+            request = response.request
+            body = None
+            try:
+                body = response.text()
+            except Exception:
+                body = None
+            self.entries.append(
+                {
+                    "startedDateTime": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+                    "time": 0,
+                    "request": {
+                        "method": request.method,
+                        "url": request.url,
+                        "httpVersion": "HTTP/1.1",
+                        "headers": [{"name": k, "value": v} for k, v in (request.headers or {}).items()],
+                        "queryString": [],
+                        "cookies": [],
+                        "headersSize": -1,
+                        "bodySize": -1,
+                    },
+                    "response": {
+                        "status": response.status,
+                        "statusText": response.status_text,
+                        "httpVersion": "HTTP/1.1",
+                        "headers": [{"name": k, "value": v} for k, v in (response.headers or {}).items()],
+                        "cookies": [],
+                        "content": {"size": len(body or ""), "mimeType": "text/plain", "text": body},
+                        "redirectURL": "",
+                        "headersSize": -1,
+                        "bodySize": -1,
+                    },
+                    "cache": {},
+                    "timings": {"send": 0, "wait": 0, "receive": 0},
+                }
+            )
+        except Exception:
+            pass
+
+    def on_failure(self, request):
+        self.entries.append(
+            {
+                "startedDateTime": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+                "time": 0,
+                "request": {"method": request.method, "url": request.url, "headers": [], "queryString": [], "cookies": [], "headersSize": -1, "bodySize": -1},
+                "response": {"status": 0, "statusText": "failed", "headers": [], "cookies": [], "content": {"size": 0, "mimeType": ""}, "redirectURL": "", "headersSize": -1, "bodySize": -1},
+                "cache": {},
+                "timings": {"send": 0, "wait": 0, "receive": 0},
+            }
+        )
+
+    def write(self):
+        directory = os.path.dirname(os.path.abspath(self.path))
+        os.makedirs(directory, exist_ok=True)
+        with open(self.path, "w") as handle:
+            json.dump(
+                {
+                    "log": {
+                        "version": "1.2",
+                        "creator": {"name": "pen browser", "version": "1"},
+                        "entries": self.entries,
+                    }
+                },
+                handle,
+                indent=1,
+            )
+
+
+SNAPSHOT_JS = r"""
+() => {
+  const implicit = {input: 1, select: 1, textarea: 1};
+  const inputRoles = {checkbox: 'checkbox', radio: 'radio', submit: 'button',
+                      button: 'button', reset: 'button', file: 'button'};
+  const roleOf = (el) => {
+    const tag = el.tagName.toLowerCase();
+    const explicit = el.getAttribute('role');
+    if (explicit) return explicit;
+    if (implicit[tag]) {
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      if (tag === 'input' && inputRoles[type]) return inputRoles[type];
+      if (tag === 'select') return 'combobox';
+      return 'textbox';
+    }
+    if (tag === 'a' && el.hasAttribute('href')) return 'link';
+    if (tag === 'button') return 'button';
+    if (/^h[1-6]$/.test(tag)) return 'heading';
+    if (tag === 'img') return 'img';
+    if (tag === 'form') return 'form';
+    return null;
+  };
+  const nameOf = (el) => (el.getAttribute('aria-label') || el.getAttribute('placeholder') ||
+    el.getAttribute('alt') || el.getAttribute('name') || el.textContent || '')
+    .replace(/\s+/g, ' ').trim().slice(0, 120);
+  const digest = (text) => {
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+    return hash.toString(16);
+  };
+  document.querySelectorAll('[data-pen-ref]').forEach((el) => el.removeAttribute('data-pen-ref'));
+  const nodes = [];
+  document.querySelectorAll('*').forEach((el) => {
+    const role = roleOf(el);
+    if (!role) return;
+    const tag = el.tagName.toLowerCase();
+    if (tag !== 'option' && el.offsetParent === null) return;
+    const name = nameOf(el);
+    const ref = '@' + digest(tag + '|' + role + '|' + name);
+    el.setAttribute('data-pen-ref', ref);
+    nodes.push({ref, role, name, tag});
+  });
+  const seen = new Set();
+  return JSON.stringify({
+    url: location.href,
+    title: document.title,
+    nodes: nodes.filter((node) => {
+      if (seen.has(node.ref)) return false;
+      seen.add(node.ref);
+      return true;
+    }),
+  });
+}
+"""
+
+
+def render_snapshot(raw):
+    data = json.loads(raw)
+    lines = [f"url: {data['url']}", f"title: {data['title']}"]
+    for node in data["nodes"]:
+        label = f'{node["role"]} "{node["name"]}"' if node["name"] else node["role"]
+        lines.append(f'{node["ref"]} {label}')
+    if not data["nodes"]:
+        lines.append("(no named elements — the page may not have rendered)")
+    return "\n".join(lines)
+
+
+def resolve(page, selector):
+    """Accept a CSS/XPath selector, or an @ref from the last snapshot."""
+    if not selector.startswith("@"):
+        return page.locator(selector).first
+    locator = page.locator(f'[data-pen-ref="{selector}"]')
+    if locator.count() == 0:
+        raise Failure(f"{selector} is not in the current page; run `snapshot` again")
+    return locator.first
+
+
+def in_scope(url, targets):
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    for target in targets:
+        target = target.strip().lower()
+        if target and (host == target or host.endswith("." + target)):
+            return True
+    return False
+
+
+def check_scope(args, url):
+    if not args.target:
+        return
+    if not in_scope(url, args.target):
+        raise Failure(
+            f"{url} is outside the declared scope ({', '.join(args.target)}); "
+            "declare it with --target before navigating"
+        )
+
+
+def parse_pairs(pairs):
+    data = {}
+    for pair in pairs or []:
+        name, _, value = pair.partition("=")
+        if name:
+            data[name] = value
+    return data
+
+
+class Commands:
+    def __init__(self, args, session):
+        self.args = args
+        self.session = session
+        self.page = session.page
+        self.context = session.context
+
+    def open(self):
+        check_scope(self.args, self.args.url)
+        response = self.page.goto(self.args.url, wait_until=self.args.wait)
+        print(f"{response.status if response else 'no-response'} {self.page.url}")
+
+    def snapshot(self):
+        raw = self.page.evaluate(SNAPSHOT_JS)
+        print(raw if self.args.json else render_snapshot(raw))
+
+    def text(self):
+        if self.args.selector:
+            print(resolve(self.page, self.args.selector).inner_text())
+        else:
+            print(self.page.locator("body").inner_text())
+
+    def html(self):
+        if self.args.selector:
+            print(resolve(self.page, self.args.selector).inner_html())
+        else:
+            print(self.page.content())
+
+    def eval(self):
+        result = self.page.evaluate(self.args.js)
+        print(result if isinstance(result, str) else json.dumps(result))
+
+    def click(self):
+        resolve(self.page, self.args.selector).click()
+        print(f"clicked {self.args.selector} -> {self.page.url}")
+
+    def fill(self):
+        resolve(self.page, self.args.selector).fill(self.args.value)
+        print(f"filled {self.args.selector}")
+
+    def select(self):
+        resolve(self.page, self.args.selector).select_option(self.args.value)
+        print(f"selected {self.args.value}")
+
+    def press(self):
+        if self.args.selector:
+            resolve(self.page, self.args.selector).press(self.args.key)
+        else:
+            self.page.keyboard.press(self.args.key)
+        print(f"pressed {self.args.key}")
+
+    def wait(self):
+        if self.args.selector:
+            resolve(self.page, self.args.selector).wait_for(state=self.args.state)
+        elif self.args.load:
+            self.page.wait_for_load_state(self.args.load)
+        elif self.args.fn:
+            self.page.wait_for_function(self.args.fn)
+        else:
+            self.page.wait_for_timeout(self.args.ms)
+        print("ok")
+
+    def screenshot(self):
+        directory = self.args.dir or os.path.join(WORK, "screenshots")
+        os.makedirs(directory, exist_ok=True)
+        target = self.args.path or os.path.join(directory, screenshot_name(self.page.url))
+        self.page.screenshot(path=target, full_page=self.args.full)
+        print(target)
+
+    def cookies(self):
+        if self.args.clear:
+            self.context.clear_cookies()
+            print("cookies cleared")
+            return
+        rows = self.context.cookies()
+        print(f"{len(rows)} cookie(s)")
+        for cookie in rows:
+            print(f"{cookie['domain']}\t{cookie['name']}\t{cookie['value']}")
+
+    def storage(self):
+        kind = "localStorage" if self.args.local else "sessionStorage"
+        if self.args.clear:
+            self.page.evaluate(f"window.{kind}.clear()")
+            print(f"{kind} cleared")
+            return
+        print(json.dumps(self.page.evaluate(f"Object.fromEntries(Object.entries(window.{kind}))"), indent=1))
+
+    def headers(self):
+        extra = parse_pairs(self.args.header)
+        if not extra:
+            raise Failure("pass at least one -H name=value")
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.args.origin or self.page.url)
+        pattern = f"{parsed.scheme}://{parsed.netloc}/**"
+
+        def handler(route):
+            headers = dict(route.request.headers)
+            headers.update(extra)
+            route.continue_(headers=headers)
+
+        self.context.route(pattern, handler)
+        print(f"applying {', '.join(extra)} to {pattern}")
+
+    def close(self):
+        self.session.close()
+        self.session.kill()
+        print("closed")
+
+
+def screenshot_name(url):
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", f"{parsed.netloc}{parsed.path}").strip("_") or "page"
+    return f"{stem[:80]}_{time.strftime('%Y%m%dT%H%M%S')}.png"
+
+
+COMMAND_HELP = {
+    "open": "navigate to a URL",
+    "snapshot": "list named elements with @refs",
+    "text": "visible text of an element or the page",
+    "html": "HTML of an element or the rendered DOM",
+    "eval": "run JavaScript in the page",
+    "click": "click an element",
+    "fill": "clear and fill an input",
+    "select": "choose an option",
+    "press": "press a key",
+    "wait": "wait for an element, load state, JS condition or milliseconds",
+    "screenshot": "write a PNG",
+    "cookies": "list or clear cookies",
+    "storage": "read or clear web storage",
+    "headers": "add headers to matching requests",
+    "close": "kill the session's browser",
+}
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="browser", description=__doc__.split("\n")[0])
+    parser.add_argument("--session", default=DEFAULT_SESSION, help="session directory")
+    parser.add_argument(
+        "--target",
+        action="append",
+        metavar="HOST",
+        help="authorized target host; navigation outside it is refused (repeatable)",
+    )
+    parser.add_argument("--timeout", type=int, default=30, help="per-action timeout in seconds")
+    parser.add_argument("--har", metavar="PATH", help="write every response to a HAR file")
+    commands = parser.add_subparsers(dest="command")
+
+    run = commands.add_parser("run", help="read commands from a file or stdin")
+    run.add_argument("script", nargs="?", help="file of commands; stdin if omitted")
+
+    open_ = commands.add_parser("open", help=COMMAND_HELP["open"])
+    open_.add_argument("url")
+    open_.add_argument(
+        "--wait", default="load", choices=["load", "domcontentloaded", "networkidle", "commit"]
+    )
+
+    snapshot = commands.add_parser("snapshot", help=COMMAND_HELP["snapshot"])
+    snapshot.add_argument("--json", action="store_true")
+
+    commands.add_parser("text", help=COMMAND_HELP["text"]).add_argument("selector", nargs="?")
+    commands.add_parser("html", help=COMMAND_HELP["html"]).add_argument("selector", nargs="?")
+
+    commands.add_parser("eval", help=COMMAND_HELP["eval"]).add_argument("js")
+    commands.add_parser("click", help=COMMAND_HELP["click"]).add_argument("selector")
+
+    fill = commands.add_parser("fill", help=COMMAND_HELP["fill"])
+    fill.add_argument("selector")
+    fill.add_argument("value")
+
+    select = commands.add_parser("select", help=COMMAND_HELP["select"])
+    select.add_argument("selector")
+    select.add_argument("value")
+
+    press = commands.add_parser("press", help=COMMAND_HELP["press"])
+    press.add_argument("key")
+    press.add_argument("selector", nargs="?")
+
+    wait = commands.add_parser("wait", help=COMMAND_HELP["wait"])
+    wait.add_argument("selector", nargs="?")
+    wait.add_argument("--state", default="visible")
+    wait.add_argument("--load", choices=["load", "domcontentloaded", "networkidle"])
+    wait.add_argument("--fn")
+    wait.add_argument("--ms", type=int, default=0)
+
+    screenshot = commands.add_parser("screenshot", help=COMMAND_HELP["screenshot"])
+    screenshot.add_argument("path", nargs="?")
+    screenshot.add_argument("--full", action="store_true", help="full page instead of the viewport")
+    screenshot.add_argument("--dir", help="output directory when no path is given")
+
+    commands.add_parser("cookies", help=COMMAND_HELP["cookies"]).add_argument("--clear", action="store_true")
+
+    storage = commands.add_parser("storage", help=COMMAND_HELP["storage"])
+    storage.add_argument("--local", action="store_true", help="localStorage instead of sessionStorage")
+    storage.add_argument("--clear", action="store_true")
+
+    headers = commands.add_parser("headers", help=COMMAND_HELP["headers"])
+    headers.add_argument("-H", "--header", action="append", metavar="NAME=VALUE")
+    headers.add_argument("--origin", help="origin to scope the headers to (default: current origin)")
+
+    commands.add_parser("close", help=COMMAND_HELP["close"])
+    return parser
+
+
+def execute(line, args, session):
+    words = shlex.split(line)
+    if not words or words[0].startswith("#"):
+        return False
+    name = words[0]
+    if name == "run":
+        raise Failure("`run` cannot appear inside a run script")
+    if name not in COMMAND_HELP:
+        raise Failure(f"unknown command: {name} (known: {', '.join(sorted(COMMAND_HELP))})")
+    sub = build_parser().parse_args([name] + words[1:])
+    # Session-wide options belong to the outer invocation, not to each line.
+    for field in ("session", "target", "timeout", "har"):
+        setattr(sub, field, getattr(args, field))
+    getattr(Commands(sub, session), name)()
+    return name == "close"
+
+
+def main(argv):
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = BROWSERS_PATH
+    args = build_parser().parse_args(argv)
+    if not args.command:
+        build_parser().print_help()
+        return 2
+    session = Session(args.session, args.timeout)
+    try:
+        if args.command == "run":
+            lines = (
+                open(args.script).readlines() if args.script else sys.stdin.readlines()
+            )
+            session.connect()
+            if args.har:
+                session.record_har(args.har)
+            for line in lines:
+                if execute(line, args, session):
+                    break
+        else:
+            session.connect()
+            if args.har:
+                session.record_har(args.har)
+            if args.command == "close":
+                Commands(args, session).close()
+                return 0
+            getattr(Commands(args, session), args.command)()
+        return 0
+    except Failure as exc:
+        print(f"browser: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - shown to the operator verbatim
+        print(f"browser: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        session.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
